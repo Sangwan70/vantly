@@ -8,66 +8,81 @@ services:
     restart: always
     environment:
       # === Required Settings
-      MAIN_URL: 'http://localhost:4007'
-      FRONTEND_URL: 'http://localhost:4007'
-      NEXT_PUBLIC_BACKEND_URL: 'http://localhost:4007/api'
-      JWT_SECRET: 'random string that is unique to every install - just type random characters here!'
-      DATABASE_URL: 'postgresql://postiz-user:postiz-password@postiz-postgres:5432/postiz-db-local'
-      REDIS_URL: 'redis://postiz-redis:6379'
-      BACKEND_INTERNAL_URL: 'http://localhost:3000'
-      TEMPORAL_ADDRESS: 'temporal:7233'
-      IS_GENERAL: 'true'
-      DISABLE_REGISTRATION: 'false'
+      MAIN_URL: '${MAIN_URL}'
+      FRONTEND_URL: '${FRONTEND_URL}'
+      NEXT_PUBLIC_BACKEND_URL: '${NEXT_PUBLIC_BACKEND_URL}'
+      JWT_SECRET: '${JWT_SECRET}'
+      DATABASE_URL: '${DATABASE_URL}'
+      REDIS_URL: '${REDIS_URL}'
+      BACKEND_INTERNAL_URL: '${BACKEND_INTERNAL_URL}'
+      TEMPORAL_ADDRESS: '${TEMPORAL_ADDRESS}'
+      IS_GENERAL: '${IS_GENERAL}'
+      DISABLE_REGISTRATION: '${DISABLE_REGISTRATION}'
 
       # === Storage Settings
-      STORAGE_PROVIDER: 'local'
-      UPLOAD_DIRECTORY: '/uploads'
-      NEXT_PUBLIC_UPLOAD_DIRECTORY: '/uploads'
+      # STORAGE_PROVIDER: 'local'
+      # UPLOAD_DIRECTORY: '/uploads'
+      # NEXT_PUBLIC_UPLOAD_DIRECTORY: '/uploads'
 
       # === Cloudflare (R2) Settings
-      # STORAGE_PROVIDER: 'cloudflare'
-      # CLOUDFLARE_ACCOUNT_ID: 'your-account-id'
-      # CLOUDFLARE_ACCESS_KEY: 'your-access-key'
-      # CLOUDFLARE_SECRET_ACCESS_KEY: 'your-secret-access-key'
-      # CLOUDFLARE_BUCKETNAME: 'your-bucket-name'
-      # CLOUDFLARE_BUCKET_URL: 'https://your-bucket-url.r2.cloudflarestorage.com/'
-      # CLOUDFLARE_REGION: 'auto'
+      # All values below are read from .env (gitignored) - never hardcode secrets here.
+      STORAGE_PROVIDER: '${STORAGE_PROVIDER}'
+      CLOUDFLARE_ACCOUNT_ID: '${CLOUDFLARE_ACCOUNT_ID}'
+      CLOUDFLARE_ACCESS_KEY: '${CLOUDFLARE_ACCESS_KEY}'
+      CLOUDFLARE_SECRET_ACCESS_KEY: '${CLOUDFLARE_SECRET_ACCESS_KEY}'
+      CLOUDFLARE_BUCKETNAME: '${CLOUDFLARE_BUCKETNAME}'
+      CLOUDFLARE_BUCKET_URL: '${CLOUDFLARE_BUCKET_URL}'
+      CLOUDFLARE_REGION: '${CLOUDFLARE_REGION}'
+
+      # ============================================
+      # SMTP Configuration
+      # ============================================
+      EMAIL_PROVIDER: '${EMAIL_PROVIDER}'
+      EMAIL_HOST: '${EMAIL_HOST}'
+      EMAIL_PORT: '${EMAIL_PORT}'
+      EMAIL_SECURE: '${EMAIL_SECURE}'
+      EMAIL_USER: '${EMAIL_USER}'
+      EMAIL_PASS: '${EMAIL_PASS}'
+      EMAIL_FROM_NAME: '${EMAIL_FROM_NAME}'
+      EMAIL_FROM_ADDRESS: '${EMAIL_FROM_ADDRESS}'
 
       # === Social Media API Settings
-      X_URL: ''
-      X_API_KEY: ''
-      X_API_SECRET: ''
-      LINKEDIN_CLIENT_ID: ''
-      LINKEDIN_CLIENT_SECRET: ''
-      REDDIT_CLIENT_ID: ''
-      REDDIT_CLIENT_SECRET: ''
-      GITHUB_CLIENT_ID: ''
-      GITHUB_CLIENT_SECRET: ''
-      BEEHIIVE_API_KEY: ''
-      BEEHIIVE_PUBLICATION_ID: ''
-      THREADS_APP_ID: ''
-      THREADS_APP_SECRET: ''
-      FACEBOOK_APP_ID: ''
-      FACEBOOK_APP_SECRET: ''
-      YOUTUBE_CLIENT_ID: ''
-      YOUTUBE_CLIENT_SECRET: ''
-      TIKTOK_CLIENT_ID: ''
-      TIKTOK_CLIENT_SECRET: ''
-      PINTEREST_CLIENT_ID: ''
-      PINTEREST_CLIENT_SECRET: ''
-      DRIBBBLE_CLIENT_ID: ''
-      DRIBBBLE_CLIENT_SECRET: ''
-      TUMBLR_CLIENT_ID: ''
-      TUMBLR_CLIENT_SECRET: ''
-      DISCORD_CLIENT_ID: ''
-      DISCORD_CLIENT_SECRET: ''
-      DISCORD_BOT_TOKEN_ID: ''
-      SLACK_ID: ''
-      SLACK_SECRET: ''
-      SLACK_SIGNING_SECRET: ''
-      MASTODON_URL: 'https://mastodon.social'
-      MASTODON_CLIENT_ID: ''
-      MASTODON_CLIENT_SECRET: ''
+      X_URL: '${X_URL}'
+      X_API_KEY: '${X_API_KEY}'
+      X_API_SECRET: '${X_API_SECRET}'
+      LINKEDIN_CLIENT_ID: '${LINKEDIN_CLIENT_ID}'
+      LINKEDIN_CLIENT_SECRET: '${LINKEDIN_CLIENT_SECRET}'
+      REDDIT_CLIENT_ID: '${REDDIT_CLIENT_ID}'
+      REDDIT_CLIENT_SECRET: '${REDDIT_CLIENT_SECRET}'
+      GITHUB_CLIENT_ID: '${GITHUB_CLIENT_ID}'
+      GITHUB_CLIENT_SECRET: '${GITHUB_CLIENT_SECRET}'
+      BEEHIIVE_API_KEY: '${BEEHIIVE_API_KEY}'
+      BEEHIIVE_PUBLICATION_ID: '${BEEHIIVE_PUBLICATION_ID}'
+      THREADS_APP_ID: '${THREADS_APP_ID}'
+      THREADS_APP_SECRET: '${THREADS_APP_SECRET}'
+      FACEBOOK_APP_ID: '${FACEBOOK_APP_ID}'
+      FACEBOOK_APP_SECRET: '${FACEBOOK_APP_SECRET}'
+      GOOGLE_GMB_CLIENT_ID: '${GOOGLE_GMB_CLIENT_ID}'
+      GOOGLE_GMB_CLIENT_SECRET: '${GOOGLE_GMB_CLIENT_SECRET}'
+      YOUTUBE_CLIENT_ID: '${YOUTUBE_CLIENT_ID}'
+      YOUTUBE_CLIENT_SECRET: '${YOUTUBE_CLIENT_SECRET}'
+      TIKTOK_CLIENT_ID: '${TIKTOK_CLIENT_ID}'
+      TIKTOK_CLIENT_SECRET: '${TIKTOK_CLIENT_SECRET}'
+      PINTEREST_CLIENT_ID: '${PINTEREST_CLIENT_ID}'
+      PINTEREST_CLIENT_SECRET: '${PINTEREST_CLIENT_SECRET}'
+      DRIBBBLE_CLIENT_ID: '${DRIBBBLE_CLIENT_ID}'
+      DRIBBBLE_CLIENT_SECRET: '${DRIBBBLE_CLIENT_SECRET}'
+      TUMBLR_CLIENT_ID: '${TUMBLR_CLIENT_ID}'
+      TUMBLR_CLIENT_SECRET: '${TUMBLR_CLIENT_SECRET}'
+      DISCORD_CLIENT_ID: '${DISCORD_CLIENT_ID}'
+      DISCORD_CLIENT_SECRET: '${DISCORD_CLIENT_SECRET}'
+      DISCORD_BOT_TOKEN_ID: '${DISCORD_BOT_TOKEN_ID}'
+      SLACK_ID: '${SLACK_ID}'
+      SLACK_SECRET: '${SLACK_SECRET}'
+      SLACK_SIGNING_SECRET: '${SLACK_SIGNING_SECRET}'
+      MASTODON_URL: '${MASTODON_URL}'
+      MASTODON_CLIENT_ID: '${MASTODON_CLIENT_ID}'
+      MASTODON_CLIENT_SECRET: '${MASTODON_CLIENT_SECRET}'
 
       # === OAuth & Authentik Settings
       # NEXT_PUBLIC_POSTIZ_OAUTH_DISPLAY_NAME: 'Authentik'
@@ -87,20 +102,20 @@ services:
       # SENTRY_SPOTLIGHT: '1'
 
       # === Misc Settings
-      OPENAI_API_KEY: ''
-      NEXT_PUBLIC_DISCORD_SUPPORT: ''
-      NEXT_PUBLIC_POLOTNO: ''
-      API_LIMIT: 30
+      OPENAI_API_KEY: '${OPENAI_API_KEY}'
+      NEXT_PUBLIC_DISCORD_SUPPORT: '${NEXT_PUBLIC_DISCORD_SUPPORT}'
+      NEXT_PUBLIC_POLOTNO: '${NEXT_PUBLIC_POLOTNO}'
+      API_LIMIT: '${API_LIMIT}'
 
       # === Payment / Stripe Settings
-      FEE_AMOUNT: 0.05
-      STRIPE_PUBLISHABLE_KEY: ''
-      STRIPE_SECRET_KEY: ''
-      STRIPE_SIGNING_KEY: ''
-      STRIPE_SIGNING_KEY_CONNECT: ''
+      FEE_AMOUNT: '${FEE_AMOUNT}'
+      STRIPE_PUBLISHABLE_KEY: '${STRIPE_PUBLISHABLE_KEY}'
+      STRIPE_SECRET_KEY: '${STRIPE_SECRET_KEY}'
+      STRIPE_SIGNING_KEY: '${STRIPE_SIGNING_KEY}'
+      STRIPE_SIGNING_KEY_CONNECT: '${STRIPE_SIGNING_KEY_CONNECT}'
 
       # === Developer Settings
-      NX_ADD_PLUGINS: false
+      NX_ADD_PLUGINS: '${NX_ADD_PLUGINS}'
 
       # === Short Link Service Settings (Optional - leave blank if unused)
       # DUB_TOKEN: ""
@@ -118,7 +133,7 @@ services:
       - postiz-config:/config/
       - postiz-uploads:/uploads/
     ports:
-      - '4007:5000'
+      - '${APP_PORT_BINDING}'
     networks:
       - postiz-network
       - temporal-network
