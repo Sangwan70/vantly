@@ -16,8 +16,8 @@ eg: Did you discuss this change with anybody before working on it (not required,
 
 Put a "X" in the boxes below to indicate you have followed the checklist;
 
-- [ ] I have read the [CONTRIBUTING](https://github.com/gitroomhq/postiz-app/blob/main/CONTRIBUTING.md) guide.
-- [ ] I have signed the [Contributor License Agreement (CLA)](https://contribute.vantly.social/p/postiz/cla) ([ICLA](https://github.com/gitroomhq/postiz-app/blob/main/ICLA.md) for individuals, [CCLA](https://github.com/gitroomhq/postiz-app/blob/main/CCLA.md) for entities).
+- [ ] I have read the [CONTRIBUTING](https://github.com/Sangwan70/social_media_promotion/blob/main/CONTRIBUTING.md) guide.
+- [ ] I have signed the [Contributor License Agreement (CLA)](https://contribute.vantly.social/p/postiz/cla) ([ICLA](https://github.com/Sangwan70/social_media_promotion/blob/main/ICLA.md) for individuals, [CCLA](https://github.com/Sangwan70/social_media_promotion/blob/main/CCLA.md) for entities).
 - [ ] I confirm I have not used AI to submit this PR or generate code for it.
 - [ ] I checked that there were no similar issues or PRs already open for this.
 - [ ] This PR fixes just ONE issue
