@@ -6,7 +6,7 @@ Based on the
 
 Thank you for your interest in contributing to GitroomHQ's Postiz ("We" or "Us").
 
-The purpose of this contributor agreement ("Agreement") is to clarify and document the rights granted by contributors to Us. To make this document effective, please follow the instructions at https://contribute.postiz.com/p/postiz/cla.
+The purpose of this contributor agreement ("Agreement") is to clarify and document the rights granted by contributors to Us. To make this document effective, please follow the instructions at https://contribute.vantly.social/p/postiz/cla.
 
 ### Preamble
 
@@ -22,7 +22,7 @@ This process only serves for the transfer of economic rights. So-called moral ri
 
 ### How to use this FLA
 
-If You are an employee and have created the Contribution as part of Your employment, You need to have Your employer approve this Agreement or sign the Entity version of this document. If You do not own the Copyright in Your Contribution, any other author of the Contribution should also sign this. In any event, please contact Us at nevo@postiz.com.
+If You are an employee and have created the Contribution as part of Your employment, You need to have Your employer approve this Agreement or sign the Entity version of this document. If You do not own the Copyright in Your Contribution, any other author of the Contribution should also sign this. In any event, please contact Us at we@vantly.social.
 
 ### Definitions
 

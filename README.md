@@ -1,8 +1,8 @@
 <p align="center">
-  <a href="https://postiz.com/" target="_blank">
+  <a href="https://vantly.social/" target="_blank">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/765e9d72-3ee7-4a56-9d59-a2c9befe2311">
-    <img alt="Postiz Logo" src="https://github.com/user-attachments/assets/f0d30d70-dddb-4142-8876-e9aa6ed1cb99" width="280"/>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/vantly-darkmode-logo.png">
+    <img alt="Vantly Logo" src="assets/brand/vantly-lightmode-logo.png" width="280"/>
   </picture>
   </a>
 </p>
@@ -17,32 +17,32 @@
 <div align="center">
   <strong>
   <h2>Your ultimate AI social media scheduling tool</h2><br />
-  <a href="https://postiz.com">Vantly</a>: An alternative to: Buffer.com, Hypefury, Twitter Hunter, etc...<br /><br />
+  <a href="https://vantly.social">Vantly</a>: An alternative to: Buffer.com, Hypefury, Twitter Hunter, etc...<br /><br />
   </strong>
   Vantly gives you one clear vantage point over every social channel &mdash; schedule your posts,<br />build an audience, capture leads, and grow your business, all from a single calendar.
 </div>
 
 <div class="flex" align="center">
   <br />
-  <img alt="Instagram" src="https://postiz.com/svgs/socials/Instagram.svg" width="32">
-  <img alt="Youtube" src="https://postiz.com/svgs/socials/Youtube.svg" width="32">
-  <img alt="Dribbble" src="https://postiz.com/svgs/socials/Dribbble.svg" width="32">
-  <img alt="Linkedin" src="https://postiz.com/svgs/socials/Linkedin.svg" width="32">
-  <img alt="Reddit" src="https://postiz.com/svgs/socials/Reddit.svg" width="32">
-  <img alt="TikTok" src="https://postiz.com/svgs/socials/TikTok.svg" width="32">
-  <img alt="Facebook" src="https://postiz.com/svgs/socials/Facebook.svg" width="32">
-  <img alt="Pinterest" src="https://postiz.com/svgs/socials/Pinterest.svg" width="32">
-  <img alt="Threads" src="https://postiz.com/svgs/socials/Threads.svg" width="32">
-  <img alt="X" src="https://postiz.com/svgs/socials/X.svg" width="32">
-  <img alt="Slack" src="https://postiz.com/svgs/socials/Slack.svg" width="32">
-  <img alt="Discord" src="https://postiz.com/svgs/socials/Discord.svg" width="32">
-  <img alt="Mastodon" src="https://postiz.com/svgs/socials/Mastodon.svg" width="32">
-  <img alt="Bluesky" src="https://postiz.com/svgs/socials/Bluesky.svg" width="32">
+  <img alt="Instagram" src="https://vantly.social/svgs/socials/Instagram.svg" width="32">
+  <img alt="Youtube" src="https://vantly.social/svgs/socials/Youtube.svg" width="32">
+  <img alt="Dribbble" src="https://vantly.social/svgs/socials/Dribbble.svg" width="32">
+  <img alt="Linkedin" src="https://vantly.social/svgs/socials/Linkedin.svg" width="32">
+  <img alt="Reddit" src="https://vantly.social/svgs/socials/Reddit.svg" width="32">
+  <img alt="TikTok" src="https://vantly.social/svgs/socials/TikTok.svg" width="32">
+  <img alt="Facebook" src="https://vantly.social/svgs/socials/Facebook.svg" width="32">
+  <img alt="Pinterest" src="https://vantly.social/svgs/socials/Pinterest.svg" width="32">
+  <img alt="Threads" src="https://vantly.social/svgs/socials/Threads.svg" width="32">
+  <img alt="X" src="https://vantly.social/svgs/socials/X.svg" width="32">
+  <img alt="Slack" src="https://vantly.social/svgs/socials/Slack.svg" width="32">
+  <img alt="Discord" src="https://vantly.social/svgs/socials/Discord.svg" width="32">
+  <img alt="Mastodon" src="https://vantly.social/svgs/socials/Mastodon.svg" width="32">
+  <img alt="Bluesky" src="https://vantly.social/svgs/socials/Bluesky.svg" width="32">
 </div>
 
 <p align="center">
   <br />
-  <a href="https://docs.postiz.com" rel="dofollow"><strong>Explore the docs »</strong></a>
+  <a href="https://docs.vantly.social" rel="dofollow"><strong>Explore the docs »</strong></a>
   <br />
 
   <br />
@@ -51,11 +51,11 @@
 </p>
 
 <p align="center">
-  <a href="https://platform.postiz.com">Register</a>
+  <a href="https://platform.vantly.social">Register</a>
   ·
-  <a href="https://discord.postiz.com">Join Our Discord (devs only)</a>
+  <a href="https://discord.vantly.social">Join Our Discord (devs only)</a>
   ·
-  <a href="https://docs.postiz.com/public-api">Public API</a><br />
+  <a href="https://docs.vantly.social/public-api">Public API</a><br />
 </p>
 <p align="center">
   <a href="https://www.npmjs.com/package/@postiz/node">NodeJS SDK</a>
@@ -111,7 +111,7 @@
 
 ## Quick Start
 
-To have the project up and running, please follow the [Quick Start Guide](https://docs.postiz.com/quickstart)
+To have the project up and running, please follow the [Quick Start Guide](https://docs.vantly.social/quickstart)
 
 ## Sponsor Vantly
 

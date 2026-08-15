@@ -246,7 +246,7 @@ export const useMenuItem = () => {
           />
         </svg>
       ),
-      path: 'https://affiliate.postiz.com',
+      path: 'https://affiliate.vantly.social',
       role: ['ADMIN', 'SUPERADMIN', 'USER'],
       requireBilling: true,
     },

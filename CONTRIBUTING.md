@@ -4,11 +4,11 @@ Contributions are welcome - code, docs, whatever it might be! If this is your fi
 
 ## Read the developers guide
 
-The main documentation site has a [developer guide](https://docs.postiz.com/developer-guide) . That guide provides you a good understanding of the project structure, and how to setup your development environment. Read this document after you have read that guide. This document is intended to provide you a good understanding of how to submit your first contribution.
+The main documentation site has a [developer guide](https://docs.vantly.social/developer-guide) . That guide provides you a good understanding of the project structure, and how to setup your development environment. Read this document after you have read that guide. This document is intended to provide you a good understanding of how to submit your first contribution.
 
 ## Apply via the contribution form
 
-To submit your contribution, please fill out the [contribution form](https://contribute.postiz.com/p/postiz). This helps us evaluate whether your contribution is a good fit for the project. We will review your submission and get back to you as soon as possible.
+To submit your contribution, please fill out the [contribution form](https://contribute.vantly.social/p/postiz). This helps us evaluate whether your contribution is a good fit for the project. We will review your submission and get back to you as soon as possible.
 
 ## Sign the Contributor License Agreement (CLA)
 
@@ -17,14 +17,14 @@ Before we can merge your contribution, you must agree to our Contributor License
 - Contributing as an individual? The [Individual Contributor License Agreement (ICLA)](./ICLA.md) applies.
 - Contributing on behalf of a company or other legal entity? The [Entity Contributor License Agreement (CCLA)](./CCLA.md) applies.
 
-You accept the agreement by following the instructions on the [CLA page](https://contribute.postiz.com/p/postiz/cla). You only need to do this once, and it covers your present and future contributions to Postiz.
+You accept the agreement by following the instructions on the [CLA page](https://contribute.vantly.social/p/postiz/cla). You only need to do this once, and it covers your present and future contributions to Postiz.
 
 ## Write code with others
 
 This is an open source project, with an open and welcoming community that is always keen to welcome new contributors. We recommend the two best ways to interact with the community are:
 
 - **GitHub issues**: To discuss more slowly, or longer-written messages.
-- **[Discord chat](https://discord.postiz.com)**: To chat with people [Discord chat](https://discord.postiz.com/) and a quicker feedback.
+- **[Discord chat](https://discord.vantly.social)**: To chat with people [Discord chat](https://discord.vantly.social/) and a quicker feedback.
 
 As a general rule;
 
@@ -67,6 +67,6 @@ This project follows a Fork/Feature Branch/Pull Request model. If you're not fam
 
 # Need Help?
 
-Again, do check the [developer guide](https://docs.postiz.com/developer-guide). Much of what you probably need to know is in there.
+Again, do check the [developer guide](https://docs.vantly.social/developer-guide). Much of what you probably need to know is in there.
 
-If you encounter any issues, please visit our [support page](https://docs.postiz.com/support) or check the community forums. Your contributions help make Postiz better!
+If you encounter any issues, please visit our [support page](https://docs.vantly.social/support) or check the community forums. Your contributions help make Postiz better!
