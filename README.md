@@ -17,9 +17,9 @@
 <div align="center">
   <strong>
   <h2>Your ultimate AI social media scheduling tool</h2><br />
-  <a href="https://postiz.com">Postiz</a>: An alternative to: Buffer.com, Hypefury, Twitter Hunter, etc...<br /><br />
+  <a href="https://postiz.com">Vantly</a>: An alternative to: Buffer.com, Hypefury, Twitter Hunter, etc...<br /><br />
   </strong>
-  Postiz offers everything you need to manage your social media posts,<br />build an audience, capture leads, and grow your business.
+  Vantly gives you one clear vantage point over every social channel &mdash; schedule your posts,<br />build an audience, capture leads, and grow your business, all from a single calendar.
 </div>
 
 <div class="flex" align="center">
@@ -67,11 +67,11 @@
 
 <br /><br />
 
-## 🔌 See the leading Postiz features
+## 🔌 See the leading Vantly features
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=BdsCVvEYgHU" target="_blank">
-    <img alt="Postiz" src="https://github.com/user-attachments/assets/8b9b7939-da1a-4be5-95be-42c6fce772de" />
+    <img alt="Vantly" src="https://github.com/user-attachments/assets/8b9b7939-da1a-4be5-95be-42c6fce772de" />
   </a>
 </p>
 
@@ -113,9 +113,9 @@
 
 To have the project up and running, please follow the [Quick Start Guide](https://docs.postiz.com/quickstart)
 
-## Sponsor Postiz
+## Sponsor Vantly
 
-We now give a few options to Sponsor Postiz:
+We now give a few options to Sponsor Vantly:
 - Just a donation: You like what we are building, and want to buy us some coffee so we can build faster.
 - Main repository: Get your logo with a backlink from the main Postiz repository. Postiz has over 7M downloads and 20k views per month.
 
