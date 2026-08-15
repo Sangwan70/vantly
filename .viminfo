@@ -11,10 +11,10 @@
 # hlsearch on (H) or off (h):
 ~H
 # Command Line History (newest to oldest):
+:wq
+|2,0,1786813316,,"wq"
 :q
 |2,0,1786738638,,"q"
-:wq
-|2,0,1786698486,,"wq"
 
 # Search String History (newest to oldest):
 
@@ -25,24 +25,91 @@
 # Debug Line History (newest to oldest):
 
 # Registers:
+""1	LINE	0
+	# See http://help.github.com/ignore-files/ for more about ignoring files.
+	
+	# compiled output
+	dist
+	tmp
+	/out-tsc
+	.env
+	# dependencies
+	node_modules
+	
+	# IDEs and editors
+	/.idea
+	.project
+	.classpath
+	.c9/
+	*.launch
+	.settings/
+	*.sublime-workspace
+	.vscode/*
+	
+	# IDE - VSCode
+	.vscode/
+	!.vscode/settings.json
+	!.vscode/tasks.json
+	!.vscode/launch.json
+	!.vscode/extensions.json
+	
+	# misc
+	/.sass-cache
+	/connect.lock
+	/coverage
+	/libpeerconnection.log
+	npm-debug.log
+	yarn-error.log
+	testem.log
+	/typings
+	
+	# System Files
+	.DS_Store
+	Thumbs.db
+	
+	.nx/cache
+	.nx/workspace-data
+	
+	# Next.js
+	.next
+	
+	# Vim files
+	**/*.swp
+	**/*.swo
+|3,1,1,1,50,0,1786813302,"# See http://help.github.com/ignore-files/ for more about ignoring files.","","# compiled output","dist","tmp","/out-tsc",".env","# dependencies","node_modules","","# IDEs and editors","/.idea",".project",".classpath",".c9/","*.launch",".settings/","*.sublime-workspace",".vscode/*","","# IDE - VSCode",".vscode/","!.vscode/settings.json","!.vscode/tasks.json","!.vscode/launch.json","!.vscode/extensions.json","","# misc","/.sass-cache",>15
+|<"/connect.lock","/coverage","/libpeerconnection.log","npm-debug.log","yarn-error.log","testem.log","/typings","","# System Files",".DS_Store","Thumbs.db","",".nx/cache",".nx/workspace-data","","# Next.js",".next","","# Vim files","**/*.swp","**/*.swo"
 
 # File marks:
-'0  271  0  ~/postiz/docker-compose.yaml
-|4,48,271,0,1786738638,"~/postiz/docker-compose.yaml"
-'1  1  0  ~/postiz/.env
-|4,49,1,0,1786698486,"~/postiz/.env"
-'2  2  48  ~/public_html/.htaccess
-|4,50,2,48,1786688887,"~/public_html/.htaccess"
+'0  95  24  ~/.gitignore
+|4,48,95,24,1786813316,"~/.gitignore"
+'1  271  0  ~/postiz/docker-compose.yaml
+|4,49,271,0,1786738638,"~/postiz/docker-compose.yaml"
+'2  1  0  ~/postiz/.env
+|4,50,1,0,1786698486,"~/postiz/.env"
+'3  2  48  ~/public_html/.htaccess
+|4,51,2,48,1786688887,"~/public_html/.htaccess"
 
 # Jumplist (newest first):
+-'  95  24  ~/.gitignore
+|4,39,95,24,1786813316,"~/.gitignore"
+-'  1  0  ~/.gitignore
+|4,39,1,0,1786813300,"~/.gitignore"
 -'  271  0  ~/postiz/docker-compose.yaml
 |4,39,271,0,1786738638,"~/postiz/docker-compose.yaml"
+-'  271  0  ~/postiz/docker-compose.yaml
+|4,39,271,0,1786738638,"~/postiz/docker-compose.yaml"
+-'  1  0  ~/postiz/docker-compose.yaml
+|4,39,1,0,1786738466,"~/postiz/docker-compose.yaml"
 -'  1  0  ~/postiz/docker-compose.yaml
 |4,39,1,0,1786738466,"~/postiz/docker-compose.yaml"
 -'  1  0  ~/postiz/.env
 |4,39,1,0,1786698486,"~/postiz/.env"
 -'  1  0  ~/postiz/.env
 |4,39,1,0,1786698486,"~/postiz/.env"
+-'  1  0  ~/postiz/.env
+|4,39,1,0,1786698486,"~/postiz/.env"
+-'  1  0  ~/postiz/.env
+|4,39,1,0,1786698486,"~/postiz/.env"
 -'  2  48  ~/public_html/.htaccess
 |4,39,2,48,1786688887,"~/public_html/.htaccess"
 -'  2  48  ~/public_html/.htaccess
@@ -51,6 +118,22 @@
 |4,39,2,48,1786688887,"~/public_html/.htaccess"
 -'  2  48  ~/public_html/.htaccess
 |4,39,2,48,1786688887,"~/public_html/.htaccess"
+-'  2  48  ~/public_html/.htaccess
+|4,39,2,48,1786688887,"~/public_html/.htaccess"
+-'  2  48  ~/public_html/.htaccess
+|4,39,2,48,1786688887,"~/public_html/.htaccess"
+-'  2  48  ~/public_html/.htaccess
+|4,39,2,48,1786688887,"~/public_html/.htaccess"
+-'  2  48  ~/public_html/.htaccess
+|4,39,2,48,1786688887,"~/public_html/.htaccess"
+-'  1  0  ~/public_html/.htaccess
+|4,39,1,0,1786688883,"~/public_html/.htaccess"
+-'  1  0  ~/public_html/.htaccess
+|4,39,1,0,1786688883,"~/public_html/.htaccess"
+-'  1  0  ~/public_html/.htaccess
+|4,39,1,0,1786688883,"~/public_html/.htaccess"
+-'  1  0  ~/public_html/.htaccess
+|4,39,1,0,1786688883,"~/public_html/.htaccess"
 -'  1  0  ~/public_html/.htaccess
 |4,39,1,0,1786688883,"~/public_html/.htaccess"
 -'  1  0  ~/public_html/.htaccess
@@ -61,6 +144,14 @@
 |4,39,1,0,1786688883,"~/public_html/.htaccess"
 
 # History of marks within files (newest to oldest):
+
+> ~/.gitignore
+	*	1786813315	0
+	"	95	24
+	^	95	25
+	.	95	24
+	+	1	73
+	+	95	24
 
 > ~/postiz/docker-compose.yaml
 	*	1786738637	0

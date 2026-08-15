@@ -4,9 +4,18 @@
 dist
 tmp
 /out-tsc
-.env
+
 # dependencies
 node_modules
+pnpm-store/
+.pnpm-store/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
 
 # IDEs and editors
 /.idea
@@ -17,9 +26,6 @@ node_modules
 .settings/
 *.sublime-workspace
 .vscode/*
-
-# IDE - VSCode
-.vscode/
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
@@ -32,12 +38,34 @@ node_modules
 /libpeerconnection.log
 npm-debug.log
 yarn-error.log
+pnpm-error.log
+pnpm-debug.log
 testem.log
 /typings
 
 # System Files
 .DS_Store
 Thumbs.db
+.bash_history
+.bash_logout
+.bash_profile
+.bashrc
+.lastlogin
+.myimunify_id
+.viminfo
+.spamassassinboxenable
+.spamassassinenable
+
+# Server/Application directories
+.cache/
+.caldav/
+.config/
+.cpanel/
+.ssh/
+.local/
+access-logs/
+logs/
+mail/
 
 .nx/cache
 .nx/workspace-data
@@ -53,6 +81,10 @@ Thumbs.db
 *.orig
 *.~*~
 *.tsbuildinfo
+
+# Testing
+jest_0/
+.jest-cache/
 
 # ignore Secrets folder
 .secrets/
