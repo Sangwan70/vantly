@@ -121,14 +121,14 @@ We now give a few options to Sponsor Vantly:
 
 Link: https://opencollective.com/postiz
 
-## Postiz Compliance
+## Vantly Compliance
 
-- Postiz is an open-source, self-hosted social media scheduling tool that supports platforms like X (formerly Twitter), Bluesky, Mastodon, Discord, and others.
-- Postiz hosted service uses official, platform-approved OAuth flows.
-- Postiz does not automate or scrape content from social media platforms.
-- Postiz does not collect, store, or proxy API keys or access tokens from users.
-- Postiz never asks users to paste API keys into our hosted product.
-- Postiz users always authenticate directly with the social platform (e.g., X, Discord, etc.), ensuring platform compliance and data privacy.
+- Vantly is an open-source, self-hosted social media scheduling tool that supports platforms like X (formerly Twitter), Bluesky, Mastodon, Discord, and others.
+- Vantly hosted service uses official, platform-approved OAuth flows.
+- Vantly does not automate or scrape content from social media platforms.
+- Vantly does not collect, store, or proxy API keys or access tokens from users.
+- Vantly never asks users to paste API keys into our hosted product.
+- Vantly users always authenticate directly with the social platform (e.g., X, Discord, etc.), ensuring platform compliance and data privacy.
 
 ## License
 
