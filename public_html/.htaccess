@@ -1,8 +1,64 @@
+# ============================================
+# Vantly — Apache/cPanel reverse proxy to the Dockerized app
+# Forwards every request, all HTTP methods (GET, POST, PUT, PATCH,
+# DELETE, OPTIONS, HEAD), to the Vantly container published on
+# 127.0.0.1:4007 (see .env.prod APP_PORT_BINDING / docker-compose.yaml).
+# Apache/cPanel (AutoSSL) terminates TLS on 443 here — the app itself
+# only speaks plain HTTP internally, so real client IP/scheme are
+# forwarded along via headers below.
+#
+# NOTE: ProxyPassReverse / ProxyPreserveHost are deliberately NOT used
+# here — Apache's docs restrict both to "server config, virtual host"
+# context only; they are never valid inside .htaccess, regardless of
+# AllowOverride. Host preservation isn't needed for this app anyway:
+# MAIN_URL/FRONTEND_URL/NEXT_PUBLIC_BACKEND_URL are already hardcoded
+# to https://vantly.social in .env.prod, so the app builds its own
+# absolute URLs from those instead of trusting the inbound Host header.
+# ============================================
+
 RewriteEngine On
-RewriteRule ^(.*)$ http://localhost:5000/$1 [P,L]
+
+# Capture the real protocol (http/https) as seen by Apache, so it can be
+# forwarded on — the app's own internal nginx reads X-Forwarded-Proto to
+# know whether the original request was secure.
+RewriteCond %{HTTPS} =on
+RewriteRule ^ - [E=PROTO:https]
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ - [E=PROTO:http]
+
+<IfModule mod_headers.c>
+  RequestHeader set X-Forwarded-Proto "%{PROTO}e"
+  RequestHeader set X-Forwarded-For "%{REMOTE_ADDR}e"
+  RequestHeader set X-Real-IP "%{REMOTE_ADDR}e"
+</IfModule>
+
+# Proxy everything straight through to the container. RewriteRule's [P]
+# flag forwards the request regardless of HTTP method, so GET / POST /
+# PUT / PATCH / DELETE / OPTIONS / HEAD all pass through untouched —
+# nothing method-specific is required for that part.
+RewriteRule ^(.*)$ http://127.0.0.1:4007/$1 [P,L]
+
+# Don't buffer long-lived responses — the AI chat / MCP feature streams
+# via Server-Sent Events and shouldn't be held back or cut off.
+# SetEnv requires mod_env (distinct from mod_setenvif) — must be gated
+# on mod_env.c specifically, not mod_proxy.c, or Apache throws
+# "Invalid command 'SetEnv'" the moment mod_proxy loads without mod_env.
+<IfModule mod_env.c>
+  SetEnv proxy-sendchunked 1
+  SetEnv proxy-nokeepalive 1
+</IfModule>
+
+# Explicit allow-list of the HTTP methods the API actually uses — belt
+# and braces in case anything upstream (ModSecurity, an older Apache
+# default) would otherwise restrict methods beyond GET/POST.
+<IfModule mod_authz_core.c>
+  <LimitExcept GET POST PUT PATCH DELETE OPTIONS HEAD>
+    Require all denied
+  </LimitExcept>
+</IfModule>
 
 # php -- BEGIN cPanel-generated handler, do not edit
-# Set the “ea-php82” package as the default “PHP” programming language.
+# Set the "ea-php82" package as the default "PHP" programming language.
 <IfModule mime_module>
   AddHandler application/x-httpd-ea-php82 .php .php8 .phtml
 </IfModule>

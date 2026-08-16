@@ -21,3 +21,9 @@ dist
 .git
 .github
 reports
+
+# Docker's own data-root (relocated here) and scratch/cleanup folders -
+# root-owned internals under these break the build context transfer with
+# a permission-denied error, and neither belongs in an image anyway.
+.docker
+_to_delete
