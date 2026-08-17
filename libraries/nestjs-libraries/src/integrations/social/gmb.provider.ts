@@ -221,6 +221,13 @@ export class GmbProvider extends SocialAbstract implements SocialProvider {
       });
       const accountsData = await accountsResponse.json();
 
+      if (!accountsResponse.ok) {
+        console.error(
+          `GMB accounts fetch failed (HTTP ${accountsResponse.status}):`,
+          JSON.stringify(accountsData)
+        );
+      }
+
       if (accountsData.accounts) {
         allAccounts.push(...accountsData.accounts);
       }
