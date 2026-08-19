@@ -91,6 +91,7 @@ export class DevToProvider extends SocialAbstract implements SocialProvider {
         username,
       };
     } catch (err) {
+      console.log('dev.to authenticate failed:', err);
       return 'Invalid credentials';
     }
   }

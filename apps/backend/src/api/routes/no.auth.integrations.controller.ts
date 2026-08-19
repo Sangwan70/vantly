@@ -169,9 +169,25 @@ export class NoAuthIntegrationsController {
         // with nothing in the logs to diagnose it from. Log the underlying
         // error (e.g. X's actual 403/429 response body) so a failed OAuth
         // callback is debuggable from `docker compose logs`.
+        //
+        // Providers throw two different shapes here: a plain object/Error
+        // with a `.data` field, OR (most providers, via SocialAbstract.fetch)
+        // a Temporal `ApplicationFailure` (BadBody/RefreshToken), which
+        // carries the real upstream response body in `.details`, not
+        // `.data`. Always emit ONE single-line JSON blob with everything we
+        // have - printing the raw Error object instead spreads across many
+        // lines and the real body reliably falls outside a `grep -A/-B`
+        // window (this is exactly what happened debugging the X, Reddit and
+        // Discord OAuth failures - the useful part got clipped).
+        const errAny = err as any;
         console.log(
           `social-connect authenticate failed for "${integration}":`,
-          (err as any)?.data ? JSON.stringify((err as any).data) : err
+          JSON.stringify({
+            message: errAny?.message,
+            type: errAny?.type,
+            details: errAny?.details,
+            data: errAny?.data,
+          })
         );
 
         return res({

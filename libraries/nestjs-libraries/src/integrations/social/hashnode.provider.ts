@@ -100,6 +100,7 @@ export class HashnodeProvider extends SocialAbstract implements SocialProvider {
         username,
       };
     } catch (err) {
+      console.log('hashnode authenticate failed:', err);
       return 'Invalid credentials';
     }
   }

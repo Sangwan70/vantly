@@ -126,6 +126,7 @@ export class SkoolProvider extends SocialAbstract implements SocialProvider {
         username: data.name,
       };
     } catch (e) {
+      console.log('skool authenticate failed:', e);
       return 'Invalid cookie data';
     }
   }

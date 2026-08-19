@@ -274,6 +274,13 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
     codeVerifier: string;
     refresh?: string;
   }) {
+    // Every one of these Graph API calls used to be trusted blindly - if any
+    // of them failed (bad FACEBOOK_APP_ID/SECRET, an expired/reused `code`,
+    // a callback URL mismatch, etc.) Facebook returns `{ error: {...} }`
+    // instead of the expected shape, and the code would silently carry
+    // `undefined` all the way down to `data.filter(...)`, crashing with a
+    // meaningless "Cannot read properties of undefined (reading 'filter')"
+    // that hid the real cause. Check each response explicitly instead.
     const getAccessToken = await (
       await fetch(
         'https://graph.facebook.com/v20.0/oauth/access_token' +
@@ -288,7 +295,17 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
       )
     ).json();
 
-    const { access_token } = await (
+    if (!getAccessToken?.access_token) {
+      throw new BadBody(
+        this.identifier,
+        JSON.stringify(getAccessToken),
+        '{}',
+        getAccessToken?.error?.message ||
+          'Facebook did not return an access token - check FACEBOOK_APP_ID/FACEBOOK_APP_SECRET'
+      );
+    }
+
+    const exchanged = await (
       await fetch(
         'https://graph.facebook.com/v20.0/oauth/access_token' +
           '?grant_type=fb_exchange_token' +
@@ -298,22 +315,55 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
       )
     ).json();
 
-    const { data } = await (
+    if (!exchanged?.access_token) {
+      throw new BadBody(
+        this.identifier,
+        JSON.stringify(exchanged),
+        '{}',
+        exchanged?.error?.message ||
+          'Facebook did not return a long-lived access token'
+      );
+    }
+
+    const { access_token } = exchanged;
+
+    const permissionsResponse = await (
       await fetch(
         `https://graph.facebook.com/v20.0/me/permissions?access_token=${access_token}`
       )
     ).json();
 
-    const permissions = data
+    if (!Array.isArray(permissionsResponse?.data)) {
+      throw new BadBody(
+        this.identifier,
+        JSON.stringify(permissionsResponse),
+        '{}',
+        permissionsResponse?.error?.message ||
+          'Facebook did not return the permissions list'
+      );
+    }
+
+    const permissions = permissionsResponse.data
       .filter((d: any) => d.status === 'granted')
       .map((p: any) => p.permission);
     this.checkScopes(this.scopes, permissions);
 
-    const { id, name, picture } = await (
+    const meResponse = await (
       await fetch(
         `https://graph.facebook.com/v20.0/me?fields=id,name,picture&access_token=${access_token}`
       )
     ).json();
+
+    if (!meResponse?.id) {
+      throw new BadBody(
+        this.identifier,
+        JSON.stringify(meResponse),
+        '{}',
+        meResponse?.error?.message || 'Facebook did not return the profile'
+      );
+    }
+
+    const { id, name, picture } = meResponse;
 
     return {
       id,

@@ -190,7 +190,11 @@ export class WhopProvider extends SocialAbstract implements SocialProvider {
         id: company.id,
         name: company.title,
       }));
-    } catch {
+    } catch (err) {
+      // Fired synchronously right after a successful authenticate() for
+      // two-step providers - swallowing this silently meant a Whop connect
+      // failure never showed up anywhere, not even in logs.
+      console.log('whop companies() failed:', err);
       return [];
     }
   }
@@ -215,7 +219,8 @@ export class WhopProvider extends SocialAbstract implements SocialProvider {
         id: forum.experience?.id || forum.id,
         name: forum.experience?.name || forum.id,
       }));
-    } catch {
+    } catch (err) {
+      console.log('whop experiences() failed:', err);
       return [];
     }
   }

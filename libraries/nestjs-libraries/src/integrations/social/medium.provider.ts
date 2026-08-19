@@ -82,6 +82,7 @@ export class MediumProvider extends SocialAbstract implements SocialProvider {
         username,
       };
     } catch (err) {
+      console.log('medium authenticate failed:', err);
       return 'Invalid credentials';
     }
   }

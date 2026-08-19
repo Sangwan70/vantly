@@ -216,3 +216,97 @@ Both env vars need to be set in `.env.prod` (and passed through in
 `docker-compose.yaml`, already wired) before rebuilding/redeploying:
 `docker compose --env-file .env.prod build postiz && docker compose
 --env-file .env.prod up -d postiz`.
+
+## X (Twitter): OAuth "authentication failed" - App not attached to a Project (client-not-enrolled)
+
+**Symptom:** Connecting an X channel worked all the way through X's own OAuth
+screen ("Redirecting you back to the application...") but the app then showed
+a generic "authentication failed" message. Callback URL and App permissions
+(Read+Write+DM) in the X Developer Portal were both correct - neither was the
+cause.
+
+**Root cause:** `no.auth.integrations.controller.ts`'s `/integrations/
+social-connect/:integration` handler swallowed the *real* error from
+`integrationProvider.authenticate()` and always returned the generic string
+"Authentication failed", with no logging at all. Added a `console.log` in
+that catch block (logs `err.data` when present) to surface the real error -
+this is a permanent diagnostic improvement, keep it.
+
+With that logging in place, the real error from X was:
+
+```
+{"client_id":"33317654","detail":"When authenticating requests to the X API
+v2 endpoints, you must use keys and tokens from a developer App that is
+attached to a Project. You can create a project via the developer portal.",
+"reason":"client-not-enrolled","title":"Client Forbidden"}
+```
+
+X restructured API access in 2023: every App's keys/tokens only work for v2
+endpoints (including `GET /2/users/me`, which `XProvider.authenticate()`
+calls right after login to fetch the connected profile) if that App is
+attached to a **Project** with an active access tier (Free/Basic/Pro/
+Enterprise). `client.login(code)` (the OAuth 1.0a handshake itself) succeeds
+regardless - which is why X's own redirect screen looked fine - but the
+follow-up `v2.me()` call 403s, and that's what actually failed.
+
+**Fix:** In the X Developer Portal (developer.x.com), the App behind
+`X_API_KEY`/`X_API_SECRET` (client_id `33317654`) needs to be attached to a
+Project (Projects & Apps section). If it's a legacy/standalone app created
+before Projects existed, either move it into an existing Project or create a
+new Project and attach it there, then make sure the Project has an active
+access tier selected. No code change needed for this part - purely an X
+Developer Portal / account configuration issue.
+
+**Diagnostic command** (works for any provider now, not just X):
+```
+docker compose --env-file .env.prod logs --tail=200 postiz | grep -i -A5 -B5 "social-connect authenticate failed"
+```
+
+**Confirmed resolution (Aug 19 2026):** The keys in `.env.prod` were already
+correct the whole time (app_id 33317654, "vantly-app") - the confusing part
+was the X Developer Portal's Overview page grouping this app under a
+"Vantly Social" (Free) project, while the app's own Keys & Tokens page
+showed its real Project Access as a *different* project ("The AgenticAI")
+that wasn't fully enrolled for Pay-Per-Use v2 access yet. Moving the app to
+an active pay-as-you-go plan (via Project Access -> Manage on the app's own
+page, not the account Overview page) fixed it immediately - no code change,
+no key change needed. If this resurfaces: don't trust the portal's Overview
+grouping: open the specific App -> Keys & Tokens page and check "Project
+Access" there directly.
+
+## OAuth "authentication failed" logging audit across all providers (Aug 19 2026)
+
+Following the X root-cause hunt above, audited every provider file's
+`authenticate()` (and the `pages()`/`companies()`/`reConnect()` helpers the
+OAuth callback controller calls synchronously right after it) for the same
+silent-swallow pattern: a `catch` that discards the real error and returns a
+hardcoded generic string/array with no logging.
+
+**Important: the fix already made to `no.auth.integrations.controller.ts`
+(the console.log in its outer catch) is provider-agnostic** - it covers
+every provider that calls through `/integrations/social-connect/:integration`
+(Reddit, Discord, Facebook, LinkedIn, etc. included), as long as the
+provider's own `authenticate()` doesn't catch-and-swallow the error itself
+before it can bubble up. So for most providers nothing further was needed -
+just retry the connection and grep the same log line:
+```
+docker compose --env-file .env.prod logs --tail=200 postiz | grep -i -A5 -B5 "social-connect authenticate failed"
+```
+
+**5 providers DID have their own internal silent swallow** (not covered by
+the controller fix, since the error never reached it) - fixed by adding
+`console.log` before the existing generic return, no behavior change
+otherwise:
+- `dev.to.provider.ts` - `authenticate()` catch
+- `hashnode.provider.ts` - `authenticate()` catch
+- `medium.provider.ts` - `authenticate()` catch
+- `skool.provider.ts` - `authenticate()` catch
+- `whop.provider.ts` - `companies()` AND `experiences()` catches (these run
+  right after authenticate() succeeds, for the two-step page-picker flow)
+
+All other providers checked (bluesky, discord, facebook, instagram x2, gmb,
+dribbble, reddit, pinterest, tiktok, threads, youtube, tumblr, twitch,
+slack, telegram, mastodon x2, mewe, vk, wordpress, farcaster, kick, lemmy,
+listmonk, moltbook, nostr) were already clean - either no internal catch (so
+the controller fix already surfaces the error), or the existing catch
+already logs before returning a generic message.
