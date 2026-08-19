@@ -72,6 +72,7 @@ export const YoutubeOptimizer = () => {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
       revalidateIfStale: false,
+      revalidateOnMount: true,
       fallbackData: [],
     }
   );
@@ -97,6 +98,7 @@ export const YoutubeOptimizer = () => {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
       revalidateIfStale: false,
+      revalidateOnMount: true,
     }
   );
 
