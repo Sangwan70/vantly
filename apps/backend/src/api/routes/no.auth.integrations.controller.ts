@@ -164,6 +164,16 @@ export class NoAuthIntegrationsController {
           });
         }
 
+        // This branch previously swallowed the real error entirely - the
+        // caller only ever saw the generic "Authentication failed" message,
+        // with nothing in the logs to diagnose it from. Log the underlying
+        // error (e.g. X's actual 403/429 response body) so a failed OAuth
+        // callback is debuggable from `docker compose logs`.
+        console.log(
+          `social-connect authenticate failed for "${integration}":`,
+          err?.data ? JSON.stringify(err.data) : err
+        );
+
         return res({
           error: 'Authentication failed',
           accessToken: '',
