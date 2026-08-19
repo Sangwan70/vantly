@@ -190,6 +190,15 @@ export class IntegrationsController {
     );
   }
 
+  @Get('/:id/videos')
+  async listVideos(
+    @Param('id') id: string,
+    @Query('pageToken') pageToken: string,
+    @GetOrgFromRequest() org: Organization
+  ) {
+    return this._integrationService.listChannelVideos(org, id, pageToken || undefined);
+  }
+
   @Get('/social/:integration')
   @CheckPolicies([AuthorizationActions.Create, Sections.CHANNEL])
   async getIntegrationUrl(

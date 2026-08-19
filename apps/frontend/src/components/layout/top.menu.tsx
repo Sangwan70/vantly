@@ -94,6 +94,27 @@ export const useMenuItem = () => {
       path: '/analytics',
     },
     {
+      name: t('optimize', 'Optimize'),
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 20 20"
+          fill="none"
+        >
+          <path
+            d="M10 1.5V4M10 16V18.5M18.5 10H16M4 10H1.5M15.6066 4.39339L13.8891 6.11091M6.11091 13.8891L4.39339 15.6066M15.6066 15.6066L13.8891 13.8891M6.11091 6.11091L4.39339 4.39339M13.5 10C13.5 11.933 11.933 13.5 10 13.5C8.067 13.5 6.5 11.933 6.5 10C6.5 8.067 8.067 6.5 10 6.5C11.933 6.5 13.5 8.067 13.5 10Z"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ),
+      path: '/optimize',
+    },
+    {
       name: t('media', 'Media'),
       icon: (
         <svg

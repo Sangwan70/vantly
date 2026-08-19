@@ -310,3 +310,41 @@ slack, telegram, mastodon x2, mewe, vk, wordpress, farcaster, kick, lemmy,
 listmonk, moltbook, nostr) were already clean - either no internal catch (so
 the controller fix already surfaces the error), or the existing catch
 already logs before returning a generic message.
+
+## YouTube Optimizer — Phase 1 shipped, not yet deployed (Aug 19 2026)
+
+Phase 1 of the "vidIQ for Vantly" YouTube optimizer plan (see
+`YOUTUBE_OPTIMIZER_PLAN.md`, delivered to the user separately) is written and
+pushed to this checkout, but **not built or deployed** — same as the OAuth
+logging fixes above, this needs a `docker compose build/up` cycle before it's
+live. No DB migration in this phase — read-only, additive only.
+
+Files touched:
+- `libraries/nestjs-libraries/src/integrations/social/social.integrations.interface.ts` —
+  added `VideoListItem`/`VideoDetails` types and optional `listVideos?()` /
+  `getVideoDetails?()` methods on `SocialProvider`, following the same
+  optional-method pattern as `analytics?`/`fetchPageInformation?` so no
+  generic code needs to branch on provider identifier.
+- `libraries/nestjs-libraries/src/integrations/social/youtube.provider.ts` —
+  implements both new methods. `listVideos` walks the channel's uploads
+  playlist via `playlistItems.list` (1 quota unit) instead of `search.list`
+  (100 quota units) per the plan's quota-budget decision, then batches
+  `videos.list` for view/like/comment counts.
+- `libraries/nestjs-libraries/src/database/prisma/integrations/integration.service.ts` —
+  new `listChannelVideos()` method, mirrors the existing `checkAnalytics()`
+  lookup/token-refresh/retry-once shape, dispatched generically via
+  `IntegrationManager.getSocialIntegration()`.
+- `apps/backend/src/api/routes/integrations.controller.ts` — new
+  `GET /integrations/:id/videos` endpoint (already in the JWT-authenticated
+  controller list, no `api.module.ts` change needed).
+- `apps/frontend/src/app/(app)/(site)/optimize/page.tsx` (new) and
+  `apps/frontend/src/components/youtube-optimizer/youtube.optimizer.tsx`
+  (new) — the video grid UI: real thumbnails/titles/view-like-comment counts
+  per channel, score badges shown as placeholders ("—"), "Update scores"
+  button disabled (wired up in Phase 2+).
+- `apps/frontend/src/components/layout/top.menu.tsx` — added an "Optimize"
+  nav item pointing at `/optimize`, next to Analytics.
+
+Not yet done: build/deploy/smoke-test on production, and everything from
+Phase 2 onward (AI title/SEO suggestions, thumbnail generation, comments,
+video review tab, insights feed) per the plan doc.

@@ -159,6 +159,22 @@ export type FetchPageInformationResult = {
   username: string;
 };
 
+export type VideoListItem = {
+  id: string;
+  title: string;
+  description: string;
+  thumbnail: string;
+  publishedAt: string;
+  viewCount: string;
+  likeCount: string;
+  commentCount: string;
+};
+
+export type VideoDetails = VideoListItem & {
+  tags: string[];
+  privacyStatus: string;
+};
+
 export interface SocialProvider
   extends IAuthenticator,
     ISocialMediaIntegration {
@@ -220,4 +236,18 @@ export interface SocialProvider
     accessToken: string,
     data: any
   ): Promise<FetchPageInformationResult>;
+  // Optional: providers that expose a video library (currently just YouTube)
+  // implement these so the optimizer feature can list/inspect videos without
+  // any provider-specific branching in generic controller/service code -
+  // callers always go through IntegrationManager.getSocialIntegration() and
+  // check `if (provider.listVideos)` rather than importing YoutubeProvider.
+  listVideos?(
+    accessToken: string,
+    channelId: string,
+    pageToken?: string
+  ): Promise<{ videos: VideoListItem[]; nextPageToken?: string }>;
+  getVideoDetails?(
+    accessToken: string,
+    videoId: string
+  ): Promise<VideoDetails | undefined>;
 }

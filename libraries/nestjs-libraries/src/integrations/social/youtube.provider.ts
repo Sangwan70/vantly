@@ -5,6 +5,8 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
+  VideoDetails,
+  VideoListItem,
 } from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
 import { Integration } from '@prisma/client';
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
@@ -957,6 +959,139 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
       return acc;
     } catch (err) {
       return [];
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Optimizer Phase 1: read-only video listing/detail, additive - no existing
+  // method's behavior changes. listVideos deliberately walks the channel's
+  // uploads playlist (playlistItems.list, 1 quota unit) instead of
+  // search.list (100 quota units) since this is listing the channel's own
+  // videos, not searching for third-party ones.
+  // ---------------------------------------------------------------------------
+  async listVideos(
+    accessToken: string,
+    channelId: string,
+    pageToken?: string
+  ): Promise<{ videos: VideoListItem[]; nextPageToken?: string }> {
+    const { client, youtube } = clientAndYoutube();
+    client.setCredentials({ access_token: accessToken });
+    const youtubeClient = youtube(client);
+
+    try {
+      const channelResponse = await youtubeClient.channels.list({
+        part: ['contentDetails'],
+        id: [channelId],
+      });
+
+      const uploadsPlaylistId =
+        channelResponse.data.items?.[0]?.contentDetails?.relatedPlaylists
+          ?.uploads;
+
+      if (!uploadsPlaylistId) {
+        return { videos: [] };
+      }
+
+      const playlistResponse = await youtubeClient.playlistItems.list({
+        part: ['snippet', 'contentDetails'],
+        playlistId: uploadsPlaylistId,
+        maxResults: 50,
+        pageToken,
+      });
+
+      const items = playlistResponse.data.items || [];
+      const videoIds = items
+        .map((item) => item.contentDetails?.videoId)
+        .filter((id): id is string => !!id);
+
+      if (!videoIds.length) {
+        return { videos: [] };
+      }
+
+      // playlistItems doesn't carry view/like/comment counts - a second call
+      // against videos.list (also 1 quota unit) fills those in.
+      const statsResponse = await youtubeClient.videos.list({
+        part: ['statistics', 'snippet'],
+        id: videoIds,
+      });
+
+      const statsByVideoId = new Map(
+        (statsResponse.data.items || []).map((video) => [video.id, video])
+      );
+
+      const videos = items
+        .map((item): VideoListItem | undefined => {
+          const videoId = item.contentDetails?.videoId;
+          if (!videoId) {
+            return undefined;
+          }
+
+          const video = statsByVideoId.get(videoId);
+          const snippet = video?.snippet || item.snippet;
+
+          return {
+            id: videoId,
+            title: snippet?.title || 'Untitled',
+            description: snippet?.description || '',
+            thumbnail:
+              snippet?.thumbnails?.high?.url ||
+              snippet?.thumbnails?.default?.url ||
+              '',
+            publishedAt: item.contentDetails?.videoPublishedAt || '',
+            viewCount: video?.statistics?.viewCount || '0',
+            likeCount: video?.statistics?.likeCount || '0',
+            commentCount: video?.statistics?.commentCount || '0',
+          };
+        })
+        .filter((video): video is VideoListItem => !!video);
+
+      return {
+        videos,
+        nextPageToken: playlistResponse.data.nextPageToken || undefined,
+      };
+    } catch (error) {
+      console.error('Failed to fetch YouTube channel videos:', error);
+      return { videos: [] };
+    }
+  }
+
+  async getVideoDetails(
+    accessToken: string,
+    videoId: string
+  ): Promise<VideoDetails | undefined> {
+    const { client, youtube } = clientAndYoutube();
+    client.setCredentials({ access_token: accessToken });
+    const youtubeClient = youtube(client);
+
+    try {
+      const response = await youtubeClient.videos.list({
+        part: ['snippet', 'statistics', 'status'],
+        id: [videoId],
+      });
+
+      const video = response.data.items?.[0];
+      if (!video) {
+        return undefined;
+      }
+
+      return {
+        id: video.id!,
+        title: video.snippet?.title || '',
+        description: video.snippet?.description || '',
+        tags: video.snippet?.tags || [],
+        thumbnail:
+          video.snippet?.thumbnails?.high?.url ||
+          video.snippet?.thumbnails?.default?.url ||
+          '',
+        publishedAt: video.snippet?.publishedAt || '',
+        privacyStatus: video.status?.privacyStatus || '',
+        viewCount: video.statistics?.viewCount || '0',
+        likeCount: video.statistics?.likeCount || '0',
+        commentCount: video.statistics?.commentCount || '0',
+      };
+    } catch (error) {
+      console.error('Failed to fetch YouTube video details:', error);
+      return undefined;
     }
   }
 

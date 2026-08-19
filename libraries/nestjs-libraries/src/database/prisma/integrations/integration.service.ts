@@ -10,6 +10,7 @@ import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integ
 import {
   AnalyticsData,
   SocialProvider,
+  VideoListItem,
 } from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
 import { Integration, Organization } from '@prisma/client';
 import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/notifications/notification.service';
@@ -405,6 +406,78 @@ export class IntegrationService {
     }
 
     return [];
+  }
+
+  // Optimizer Phase 1: mirrors checkAnalytics's lookup/refresh/retry shape
+  // above, but dispatched through `listVideos` instead of `analytics` - kept
+  // generic (no `if (identifier === 'youtube')`) so any provider that later
+  // implements listVideos gets this for free via IntegrationManager.
+  async listChannelVideos(
+    org: Organization,
+    integration: string,
+    pageToken?: string,
+    forceRefresh = false
+  ): Promise<{ videos: VideoListItem[]; nextPageToken?: string }> {
+    const getIntegration = await this.getIntegrationById(org.id, integration);
+
+    if (!getIntegration) {
+      throw new Error('Invalid integration');
+    }
+
+    if (getIntegration.type !== 'social') {
+      return { videos: [] };
+    }
+
+    const integrationProvider = this._integrationManager.getSocialIntegration(
+      getIntegration.providerIdentifier
+    );
+
+    if (!integrationProvider.listVideos) {
+      return { videos: [] };
+    }
+
+    if (
+      dayjs(getIntegration?.tokenExpiration).isBefore(dayjs()) ||
+      forceRefresh
+    ) {
+      const data = await this._refreshIntegrationService.refresh(
+        getIntegration
+      );
+      if (!data) {
+        return { videos: [] };
+      }
+
+      const { accessToken } = data;
+
+      if (accessToken) {
+        getIntegration.token = accessToken;
+
+        if (integrationProvider.refreshWait) {
+          await timer(10000);
+        }
+      } else {
+        await this.disconnectChannel(org.id, getIntegration);
+        return { videos: [] };
+      }
+    }
+
+    try {
+      return await integrationProvider.listVideos(
+        getIntegration.token,
+        getIntegration.internalId,
+        pageToken
+      );
+    } catch (e) {
+      if (e instanceof RefreshToken) {
+        return this.listChannelVideos(org, integration, pageToken, true);
+      }
+
+      console.log(
+        `listChannelVideos failed for integration "${integration}":`,
+        e
+      );
+      return { videos: [] };
+    }
   }
 
   customers(orgId: string) {
