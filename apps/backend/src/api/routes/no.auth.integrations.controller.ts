@@ -171,7 +171,7 @@ export class NoAuthIntegrationsController {
         // callback is debuggable from `docker compose logs`.
         console.log(
           `social-connect authenticate failed for "${integration}":`,
-          err?.data ? JSON.stringify(err.data) : err
+          (err as any)?.data ? JSON.stringify((err as any).data) : err
         );
 
         return res({
