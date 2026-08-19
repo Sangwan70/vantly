@@ -61,15 +61,17 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
   oneTimeToken = true;
 
   isBetweenSteps = false;
-  scopes = [
-    'openid',
-    'profile',
-    'w_member_social',
-    'r_basicprofile',
-    'rw_organization_admin',
-    'w_organization_social',
-    'r_organization_social',
-  ];
+  // Personal-profile scopes only. The organization scopes
+  // (rw_organization_admin / w_organization_social / r_organization_social)
+  // require LinkedIn's Community Management API product, which LinkedIn does
+  // not allow on the same Developer app as "Sign In with LinkedIn using
+  // OpenID Connect" / "Share on LinkedIn" (the products this personal-profile
+  // flow needs). Those org scopes live on LinkedinPageProvider's own
+  // `scopes` override instead, authenticated against a *separate* LinkedIn
+  // app (LINKEDIN_PAGE_CLIENT_ID/SECRET) that has Community Management API
+  // as its only product. Do not add the org scopes back here - requesting a
+  // scope the app isn't provisioned for breaks the personal OAuth flow.
+  scopes = ['openid', 'profile', 'w_member_social', 'r_basicprofile'];
   override maxConcurrentJob = 2;
   refreshWait = true;
   editor = 'normal' as const;

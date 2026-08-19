@@ -52,6 +52,13 @@ services:
       X_API_SECRET: '${X_API_SECRET}'
       LINKEDIN_CLIENT_ID: '${LINKEDIN_CLIENT_ID}'
       LINKEDIN_CLIENT_SECRET: '${LINKEDIN_CLIENT_SECRET}'
+      # Separate LinkedIn Developer app for the "LinkedIn Page" integration.
+      # Must be a different app than LINKEDIN_CLIENT_ID/SECRET above: LinkedIn
+      # does not allow the Community Management API product (needed for
+      # organization/page posting) on the same app as Sign In with LinkedIn /
+      # Share on LinkedIn (needed for personal posting).
+      LINKEDIN_PAGE_CLIENT_ID: '${LINKEDIN_PAGE_CLIENT_ID}'
+      LINKEDIN_PAGE_CLIENT_SECRET: '${LINKEDIN_PAGE_CLIENT_SECRET}'
       REDDIT_CLIENT_ID: '${REDDIT_CLIENT_ID}'
       REDDIT_CLIENT_SECRET: '${REDDIT_CLIENT_SECRET}'
       GITHUB_CLIENT_ID: '${GITHUB_CLIENT_ID}'
