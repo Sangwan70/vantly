@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
+import {
+  pricing,
+  PricingInnerInterface,
+} from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
 import { SubscriptionRepository } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.repository';
 import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
 import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
@@ -9,6 +12,22 @@ import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
 
 @Injectable()
 export class SubscriptionService {
+  // Maps a `checkType` string (the `type` column on the `credits` table) to
+  // the pricing-tier field it's metered against. Explicit and additive: the
+  // two pre-existing types keep their exact old lookup (checkCredits used to
+  // be a hardcoded `checkType === 'ai_images' ? image_generation_count :
+  // generate_videos` ternary - unmapped/unknown checkTypes still fall back to
+  // 'generate_videos' below, identical to that ternary's old else-branch), so
+  // no existing caller's behavior changes.
+  private static readonly CREDIT_FIELD_BY_TYPE: Record<
+    string,
+    keyof PricingInnerInterface
+  > = {
+    ai_images: 'image_generation_count',
+    ai_videos: 'generate_videos',
+    youtube_text_suggestions: 'youtube_text_suggestions',
+  };
+
   constructor(
     private readonly _subscriptionRepository: SubscriptionRepository,
     private readonly _integrationService: IntegrationService,
@@ -231,10 +250,9 @@ export class SubscriptionService {
     }
 
     const checkFromMonth = date.subtract(1, 'month');
-    const imageGenerationCount =
-      checkType === 'ai_images'
-        ? pricing[type].image_generation_count
-        : pricing[type].generate_videos;
+    const creditField =
+      SubscriptionService.CREDIT_FIELD_BY_TYPE[checkType] || 'generate_videos';
+    const allowedCount = pricing[type][creditField] as number;
 
     const totalUse = await this._subscriptionRepository.getCreditsFrom(
       organization.id,
@@ -243,7 +261,7 @@ export class SubscriptionService {
     );
 
     return {
-      credits: imageGenerationCount - totalUse,
+      credits: allowedCount - totalUse,
     };
   }
 

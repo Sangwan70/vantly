@@ -44,6 +44,7 @@ import { ErrorsRepository } from '@gitroom/nestjs-libraries/database/prisma/erro
 import { ErrorsService } from '@gitroom/nestjs-libraries/database/prisma/errors/errors.service';
 import { AdminStatsRepository } from '@gitroom/nestjs-libraries/database/prisma/admin-stats/admin-stats.repository';
 import { AdminStatsService } from '@gitroom/nestjs-libraries/database/prisma/admin-stats/admin-stats.service';
+import { YoutubeOptimizerService } from '@gitroom/nestjs-libraries/youtube-optimizer/youtube.optimizer.service';
 
 @Global()
 @Module({
@@ -97,6 +98,7 @@ import { AdminStatsService } from '@gitroom/nestjs-libraries/database/prisma/adm
     ErrorsService,
     AdminStatsRepository,
     AdminStatsService,
+    YoutubeOptimizerService,
   ],
   get exports() {
     return this.providers;

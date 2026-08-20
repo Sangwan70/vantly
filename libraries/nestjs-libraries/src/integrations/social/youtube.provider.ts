@@ -5,8 +5,12 @@ import {
   PostDetails,
   PostResponse,
   SocialProvider,
+  ChannelStats,
+  SimilarVideo,
+  VideoComment,
   VideoDetails,
   VideoListItem,
+  VideoTranscript,
 } from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
 import { Integration } from '@prisma/client';
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
@@ -1092,6 +1096,388 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
     } catch (error) {
       console.error('Failed to fetch YouTube video details:', error);
       return undefined;
+    }
+  }
+
+  // Optimizer Phase 2: applies AI-generated title/description/tag suggestions.
+  // videos.update requires the FULL snippet back in the request (a partial
+  // patch would null out fields YouTube doesn't receive, e.g. categoryId),
+  // so the current snippet is fetched first and only the caller's fields are
+  // overwritten on top of it.
+  async updateVideoMetadata(
+    accessToken: string,
+    videoId: string,
+    data: { title?: string; description?: string; tags?: string[] }
+  ): Promise<{ success: boolean }> {
+    const { client, youtube } = clientAndYoutube();
+    client.setCredentials({ access_token: accessToken });
+    const youtubeClient = youtube(client);
+
+    try {
+      const current = await youtubeClient.videos.list({
+        part: ['snippet'],
+        id: [videoId],
+      });
+
+      const snippet = current.data.items?.[0]?.snippet;
+      if (!snippet) {
+        throw new BadBody(this.identifier, '{}', '{}', 'Video not found');
+      }
+
+      await youtubeClient.videos.update({
+        part: ['snippet'],
+        requestBody: {
+          id: videoId,
+          snippet: {
+            ...snippet,
+            ...(data.title !== undefined ? { title: data.title } : {}),
+            ...(data.description !== undefined
+              ? { description: data.description }
+              : {}),
+            ...(data.tags !== undefined ? { tags: data.tags } : {}),
+          },
+        },
+      });
+
+      return { success: true };
+    } catch (error) {
+      if (error instanceof BadBody || error instanceof RefreshToken) {
+        throw error;
+      }
+
+      console.error('Failed to update YouTube video metadata:', error);
+      throw new BadBody(
+        this.identifier,
+        '{}',
+        '{}',
+        'Failed to update the video on YouTube'
+      );
+    }
+  }
+
+  // Optimizer Phase 3: sets an already-uploaded image as the video thumbnail.
+  // Same thumbnails.set() call finalizePost already uses for a fresh upload's
+  // thumbnail, factored out so it can be called standalone against an
+  // existing video.
+  async setVideoThumbnail(
+    accessToken: string,
+    videoId: string,
+    thumbnailUrl: string
+  ): Promise<{ success: boolean }> {
+    const { client, youtube } = clientAndYoutube();
+    client.setCredentials({ access_token: accessToken });
+    const youtubeClient = youtube(client);
+
+    try {
+      await this.runInConcurrent(async () =>
+        youtubeClient.thumbnails.set({
+          videoId,
+          media: {
+            body: (
+              await this.getSsrfSafeAxios()({
+                url: thumbnailUrl,
+                method: 'GET',
+                responseType: 'stream',
+              })
+            ).data,
+          },
+        })
+      );
+
+      return { success: true };
+    } catch (error) {
+      if (error instanceof BadBody || error instanceof RefreshToken) {
+        throw error;
+      }
+
+      console.error('Failed to set YouTube video thumbnail:', error);
+      throw new BadBody(
+        this.identifier,
+        '{}',
+        '{}',
+        'Failed to set the video thumbnail on YouTube'
+      );
+    }
+  }
+
+  // Optimizer Phase 4: top-level comment threads + whether the channel owner
+  // has already replied. commentThreads.list only returns up to 5 replies
+  // inline per thread (part=replies) - fine for detecting an owner reply on
+  // the vast majority of threads, but a thread with a long reply chain where
+  // the owner's reply fell outside the first 5 would be misreported as
+  // unanswered. Accepted as a Phase 4 simplification rather than paginating
+  // comments.list per-thread for every video load.
+  async listComments(
+    accessToken: string,
+    videoId: string,
+    channelId: string
+  ): Promise<VideoComment[]> {
+    const { client, youtube } = clientAndYoutube();
+    client.setCredentials({ access_token: accessToken });
+    const youtubeClient = youtube(client);
+
+    try {
+      const response = await youtubeClient.commentThreads.list({
+        part: ['snippet', 'replies'],
+        videoId,
+        maxResults: 50,
+        order: 'time',
+        textFormat: 'plainText',
+      });
+
+      const threads = response.data.items || [];
+
+      return threads.map((thread) => {
+        const topLevel = thread.snippet?.topLevelComment;
+        const snippet = topLevel?.snippet;
+        const replies = thread.replies?.comments || [];
+        const hasChannelOwnerReply = replies.some(
+          (reply) => reply.snippet?.authorChannelId?.value === channelId
+        );
+
+        return {
+          id: topLevel?.id || thread.id!,
+          authorDisplayName: snippet?.authorDisplayName || 'Unknown',
+          authorProfileImageUrl: snippet?.authorProfileImageUrl || '',
+          text: snippet?.textDisplay || '',
+          publishedAt: snippet?.publishedAt || '',
+          likeCount: snippet?.likeCount || 0,
+          totalReplyCount: thread.snippet?.totalReplyCount || 0,
+          hasChannelOwnerReply,
+        };
+      });
+    } catch (error) {
+      console.error('Failed to fetch YouTube comments:', error);
+      return [];
+    }
+  }
+
+  async replyToComment(
+    accessToken: string,
+    commentId: string,
+    text: string
+  ): Promise<{ success: boolean }> {
+    const { client, youtube } = clientAndYoutube();
+    client.setCredentials({ access_token: accessToken });
+    const youtubeClient = youtube(client);
+
+    try {
+      await youtubeClient.comments.insert({
+        part: ['snippet'],
+        requestBody: {
+          snippet: {
+            parentId: commentId,
+            textOriginal: text,
+          },
+        },
+      });
+
+      return { success: true };
+    } catch (error) {
+      if (error instanceof BadBody || error instanceof RefreshToken) {
+        throw error;
+      }
+
+      console.error('Failed to reply to YouTube comment:', error);
+      throw new BadBody(
+        this.identifier,
+        '{}',
+        '{}',
+        'Failed to post the reply on YouTube'
+      );
+    }
+  }
+
+  // Optimizer Phase 5: pulls the video's caption track and returns a plain
+  // text transcript with inline "[mm:ss]" markers so the Review tab's LLM
+  // critique can cite real timestamps, which the frontend then uses to seek
+  // the embedded player. Prefers a manually-created/standard track over
+  // auto-generated (ASR) captions when both exist, since ASR text is
+  // noisier - but falls back to ASR (or any available track) rather than
+  // failing outright, since auto-captions are the norm for most creators.
+  // Returns undefined (not a throw) when there's simply no caption track -
+  // that's a real, common, user-facing case, not an error.
+  async getTranscript(
+    accessToken: string,
+    videoId: string
+  ): Promise<VideoTranscript | undefined> {
+    const { client, youtube } = clientAndYoutube();
+    client.setCredentials({ access_token: accessToken });
+    const youtubeClient = youtube(client);
+
+    try {
+      const list = await youtubeClient.captions.list({
+        part: ['snippet'],
+        videoId,
+      });
+
+      const tracks = list.data.items || [];
+      if (!tracks.length) {
+        return undefined;
+      }
+
+      const preferred =
+        tracks.find(
+          (track) =>
+            track.snippet?.trackKind !== 'ASR' &&
+            (track.snippet?.language || '').startsWith('en')
+        ) ||
+        tracks.find((track) => track.snippet?.trackKind !== 'ASR') ||
+        tracks.find((track) =>
+          (track.snippet?.language || '').startsWith('en')
+        ) ||
+        tracks[0];
+
+      const download = await youtubeClient.captions.download(
+        { id: preferred.id!, tfmt: 'srt' },
+        { responseType: 'text' }
+      );
+
+      const transcript = this.srtToTimestampedText(
+        (download.data as unknown as string) || ''
+      );
+
+      if (!transcript.trim()) {
+        return undefined;
+      }
+
+      return { transcript, source: 'captions' };
+    } catch (error) {
+      console.error('Failed to fetch YouTube transcript:', error);
+      return undefined;
+    }
+  }
+
+  // Converts raw SRT caption text into "[mm:ss] line" per cue, dropping the
+  // numeric index lines. Good enough for feeding an LLM (which just needs
+  // real, referenceable timestamps) - not a general-purpose SRT parser.
+  private srtToTimestampedText(srt: string): string {
+    const blocks = srt.replace(/\r/g, '').split('\n\n').filter(Boolean);
+    const lines: string[] = [];
+
+    for (const block of blocks) {
+      const parts = block.split('\n');
+      const timeLine = parts[1];
+      if (!timeLine || !timeLine.includes('-->')) {
+        continue;
+      }
+
+      const start = timeLine.split('-->')[0].trim();
+      const [h, m, sRaw] = start.split(':');
+      const s = (sRaw || '0').split(',')[0];
+      const totalSeconds =
+        (parseInt(h || '0', 10) || 0) * 3600 +
+        (parseInt(m || '0', 10) || 0) * 60 +
+        (parseInt(s || '0', 10) || 0);
+      const mm = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+      const ss = String(totalSeconds % 60).padStart(2, '0');
+      const text = parts.slice(2).join(' ').trim();
+
+      if (text) {
+        lines.push(`[${mm}:${ss}] ${text}`);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  // Optimizer Phase 6: channel totals for the "Insights feed" home screen's
+  // subscriber/view milestone progress bars. Same channels.list(part:
+  // statistics) shape `pages()`/`fetchPageInformation` already use above,
+  // just against an arbitrary channelId rather than the connected account.
+  async getChannelStats(
+    accessToken: string,
+    channelId: string
+  ): Promise<ChannelStats | undefined> {
+    const { client, youtube } = clientAndYoutube();
+    client.setCredentials({ access_token: accessToken });
+    const youtubeClient = youtube(client);
+
+    try {
+      const response = await youtubeClient.channels.list({
+        part: ['statistics'],
+        id: [channelId],
+      });
+
+      const stats = response.data.items?.[0]?.statistics;
+      if (!stats) {
+        return undefined;
+      }
+
+      return {
+        subscriberCount: Number(stats.subscriberCount || 0),
+        viewCount: Number(stats.viewCount || 0),
+        videoCount: Number(stats.videoCount || 0),
+      };
+    } catch (error) {
+      console.error('Failed to fetch YouTube channel stats:', error);
+      return undefined;
+    }
+  }
+
+  // Optimizer Phase 6: competitive benchmarking for title suggestions (see
+  // YOUTUBE_OPTIMIZER_PLAN.md section 5's quota warning - search.list is 100
+  // quota units vs 1 for the reads used elsewhere in this file, so the
+  // caller is expected to cache results aggressively rather than calling
+  // this on every page load). Uses the connected account's own OAuth token
+  // rather than a separate API key - search.list works fine against public
+  // videos with a user token, so this avoids introducing a second auth
+  // mechanism just for this one call.
+  async searchSimilarVideos(
+    accessToken: string,
+    query: string,
+    excludeChannelId: string
+  ): Promise<SimilarVideo[]> {
+    const { client, youtube } = clientAndYoutube();
+    client.setCredentials({ access_token: accessToken });
+    const youtubeClient = youtube(client);
+
+    try {
+      const response = await youtubeClient.search.list({
+        part: ['snippet'],
+        q: query,
+        type: ['video'],
+        order: 'viewCount',
+        maxResults: 10,
+      });
+
+      const items = (response.data.items || []).filter(
+        (item) => item.snippet?.channelId !== excludeChannelId && item.id?.videoId
+      );
+
+      const videoIds = items
+        .map((item) => item.id?.videoId)
+        .filter((id): id is string => !!id)
+        .slice(0, 5);
+
+      if (!videoIds.length) {
+        return [];
+      }
+
+      // search.list doesn't return view counts - one extra videos.list call
+      // (1 quota unit) fills them in for the handful of results we keep.
+      const statsResponse = await youtubeClient.videos.list({
+        part: ['statistics'],
+        id: videoIds,
+      });
+
+      const viewCountByVideoId = new Map(
+        (statsResponse.data.items || []).map((video) => [
+          video.id,
+          video.statistics?.viewCount || '0',
+        ])
+      );
+
+      return items
+        .filter((item) => videoIds.includes(item.id?.videoId || ''))
+        .map((item) => ({
+          title: item.snippet?.title || '',
+          channelTitle: item.snippet?.channelTitle || '',
+          viewCount: viewCountByVideoId.get(item.id!.videoId!) || '0',
+        }));
+    } catch (error) {
+      console.error('Failed to search similar YouTube videos:', error);
+      return [];
     }
   }
 

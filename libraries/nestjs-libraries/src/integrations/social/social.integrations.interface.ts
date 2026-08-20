@@ -175,6 +175,45 @@ export type VideoDetails = VideoListItem & {
   privacyStatus: string;
 };
 
+export type VideoComment = {
+  id: string;
+  authorDisplayName: string;
+  authorProfileImageUrl: string;
+  text: string;
+  publishedAt: string;
+  likeCount: number;
+  totalReplyCount: number;
+  hasChannelOwnerReply: boolean;
+};
+
+// Optimizer Phase 5: a plain-text transcript with inline "[mm:ss]" markers
+// per line, sourced from the video's caption track. `source` is always
+// 'captions' today (v1 scope per YOUTUBE_OPTIMIZER_PLAN.md 3d) - kept as a
+// discriminated field rather than a bare string so a future frame-sampling
+// v2 can add a 'captions+frames' source without changing callers.
+export type VideoTranscript = {
+  transcript: string;
+  source: 'captions';
+};
+
+// Optimizer Phase 6: channel-level totals for the "Insights feed" home
+// screen's subscriber/view milestone progress bars.
+export type ChannelStats = {
+  subscriberCount: number;
+  viewCount: number;
+  videoCount: number;
+};
+
+// Optimizer Phase 6: a public video used to benchmark AI title suggestions
+// against real competing content (feature inventory item 6, "competitive
+// benchmarking"). Deliberately thin - just enough to show "similar videos
+// are getting N views with titles like this" alongside a suggestion.
+export type SimilarVideo = {
+  title: string;
+  channelTitle: string;
+  viewCount: string;
+};
+
 export interface SocialProvider
   extends IAuthenticator,
     ISocialMediaIntegration {
@@ -250,4 +289,55 @@ export interface SocialProvider
     accessToken: string,
     videoId: string
   ): Promise<VideoDetails | undefined>;
+  // Optimizer Phase 2: applies AI-generated title/description/tag suggestions
+  // back to the platform. Only the fields present in `data` are changed.
+  updateVideoMetadata?(
+    accessToken: string,
+    videoId: string,
+    data: { title?: string; description?: string; tags?: string[] }
+  ): Promise<{ success: boolean }>;
+  // Optimizer Phase 3: sets an already-uploaded image (a path/URL our own
+  // storage can serve, e.g. from MediaService.generateImage + storage upload)
+  // as the video's thumbnail.
+  setVideoThumbnail?(
+    accessToken: string,
+    videoId: string,
+    thumbnailUrl: string
+  ): Promise<{ success: boolean }>;
+  // Optimizer Phase 4: top-level comment threads for a video, with whether
+  // the channel owner (authorChannelId === channelId) has already replied -
+  // the caller filters on that to build an "unanswered comments" list rather
+  // than this method doing the filtering itself, keeping it a plain read.
+  listComments?(
+    accessToken: string,
+    videoId: string,
+    channelId: string
+  ): Promise<VideoComment[]>;
+  replyToComment?(
+    accessToken: string,
+    commentId: string,
+    text: string
+  ): Promise<{ success: boolean }>;
+  // Optimizer Phase 5: the video's caption track as a timestamped transcript,
+  // used for the Review tab's captions-only critique (see plan 3d, v1 scope).
+  // Returns undefined when no caption track exists for the video - the
+  // Review tab must handle this as a real, user-facing "not available" case
+  // rather than an error.
+  getTranscript?(
+    accessToken: string,
+    videoId: string
+  ): Promise<VideoTranscript | undefined>;
+  // Optimizer Phase 6: channel totals for the milestone progress bars.
+  getChannelStats?(
+    accessToken: string,
+    channelId: string
+  ): Promise<ChannelStats | undefined>;
+  // Optimizer Phase 6: public search for competitive benchmarking - results
+  // belonging to `excludeChannelId` are filtered out by the caller so a
+  // channel never gets "benchmarked" against its own videos.
+  searchSimilarVideos?(
+    accessToken: string,
+    query: string,
+    excludeChannelId: string
+  ): Promise<SimilarVideo[]>;
 }

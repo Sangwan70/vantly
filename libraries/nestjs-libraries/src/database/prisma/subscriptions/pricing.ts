@@ -12,6 +12,16 @@ export interface PricingInnerInterface {
   image_generator?: boolean;
   image_generation_count: number;
   generate_videos: number;
+  // YouTube Optimizer: shared pool for every non-image AI generation in the
+  // optimizer - title-rewrite/SEO suggestions (Phase 2), comment-reply
+  // drafting (Phase 4), and video review critiques (Phase 5, the priciest of
+  // the four since it's a full-transcript prompt). All gpt-4.1 chat
+  // completions, no image generation involved, so one pool keeps the pricing
+  // config simple rather than splitting into per-feature counters. Values
+  // are a starting assumption, not a confirmed business decision - adjust
+  // freely (and reconsider a per-feature split if video review's heavier
+  // token cost turns out to need its own limit).
+  youtube_text_suggestions: number;
   public_api: boolean;
   webhooks: number;
   autoPost: boolean;
@@ -37,6 +47,7 @@ export const pricing: PricingInterface = {
     webhooks: 0,
     autoPost: false,
     generate_videos: 0,
+    youtube_text_suggestions: 0,
   },
   STANDARD: {
     current: 'STANDARD',
@@ -55,6 +66,7 @@ export const pricing: PricingInterface = {
     webhooks: 2,
     autoPost: false,
     generate_videos: 3,
+    youtube_text_suggestions: 50,
   },
   TEAM: {
     current: 'TEAM',
@@ -73,6 +85,7 @@ export const pricing: PricingInterface = {
     webhooks: 10,
     autoPost: true,
     generate_videos: 10,
+    youtube_text_suggestions: 150,
   },
   PRO: {
     current: 'PRO',
@@ -91,6 +104,7 @@ export const pricing: PricingInterface = {
     webhooks: 30,
     autoPost: true,
     generate_videos: 30,
+    youtube_text_suggestions: 300,
   },
   ULTIMATE: {
     current: 'ULTIMATE',
@@ -109,5 +123,6 @@ export const pricing: PricingInterface = {
     webhooks: 10000,
     autoPost: true,
     generate_videos: 60,
+    youtube_text_suggestions: 600,
   },
 };

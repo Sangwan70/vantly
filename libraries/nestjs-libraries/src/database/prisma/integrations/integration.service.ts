@@ -408,6 +408,56 @@ export class IntegrationService {
     return [];
   }
 
+  // Shared lookup+refresh used by checkAnalytics/listChannelVideos/the
+  // youtube-optimizer service: finds a social integration for this org,
+  // refreshes its token if expired (or forceRefresh is set), and returns the
+  // now-valid integration + its dispatched provider. Returns undefined for
+  // every "nothing to do" case a caller should just treat as empty/disabled -
+  // callers that need a hard failure (e.g. invalid integration id) check that
+  // themselves before or after calling this.
+  async getValidIntegrationAndProvider(
+    org: Organization,
+    integration: string,
+    forceRefresh = false
+  ): Promise<{ integration: Integration; provider: SocialProvider } | undefined> {
+    const getIntegration = await this.getIntegrationById(org.id, integration);
+
+    if (!getIntegration || getIntegration.type !== 'social') {
+      return undefined;
+    }
+
+    const provider = this._integrationManager.getSocialIntegration(
+      getIntegration.providerIdentifier
+    );
+
+    if (
+      dayjs(getIntegration?.tokenExpiration).isBefore(dayjs()) ||
+      forceRefresh
+    ) {
+      const data = await this._refreshIntegrationService.refresh(
+        getIntegration
+      );
+      if (!data) {
+        return undefined;
+      }
+
+      const { accessToken } = data;
+
+      if (accessToken) {
+        getIntegration.token = accessToken;
+
+        if (provider.refreshWait) {
+          await timer(10000);
+        }
+      } else {
+        await this.disconnectChannel(org.id, getIntegration);
+        return undefined;
+      }
+    }
+
+    return { integration: getIntegration, provider };
+  }
+
   // Optimizer Phase 1: mirrors checkAnalytics's lookup/refresh/retry shape
   // above, but dispatched through `listVideos` instead of `analytics` - kept
   // generic (no `if (identifier === 'youtube')`) so any provider that later
@@ -418,51 +468,20 @@ export class IntegrationService {
     pageToken?: string,
     forceRefresh = false
   ): Promise<{ videos: VideoListItem[]; nextPageToken?: string }> {
-    const getIntegration = await this.getIntegrationById(org.id, integration);
-
-    if (!getIntegration) {
-      throw new Error('Invalid integration');
-    }
-
-    if (getIntegration.type !== 'social') {
-      return { videos: [] };
-    }
-
-    const integrationProvider = this._integrationManager.getSocialIntegration(
-      getIntegration.providerIdentifier
+    const found = await this.getValidIntegrationAndProvider(
+      org,
+      integration,
+      forceRefresh
     );
 
-    if (!integrationProvider.listVideos) {
+    if (!found || !found.provider.listVideos) {
       return { videos: [] };
     }
 
-    if (
-      dayjs(getIntegration?.tokenExpiration).isBefore(dayjs()) ||
-      forceRefresh
-    ) {
-      const data = await this._refreshIntegrationService.refresh(
-        getIntegration
-      );
-      if (!data) {
-        return { videos: [] };
-      }
-
-      const { accessToken } = data;
-
-      if (accessToken) {
-        getIntegration.token = accessToken;
-
-        if (integrationProvider.refreshWait) {
-          await timer(10000);
-        }
-      } else {
-        await this.disconnectChannel(org.id, getIntegration);
-        return { videos: [] };
-      }
-    }
+    const { integration: getIntegration, provider } = found;
 
     try {
-      return await integrationProvider.listVideos(
+      return await provider.listVideos(
         getIntegration.token,
         getIntegration.internalId,
         pageToken
