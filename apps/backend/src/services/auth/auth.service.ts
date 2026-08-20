@@ -311,7 +311,16 @@ export class AuthService {
       provider as Provider
     );
     if (checkExists) {
-      return { jwt: await this.jwt(checkExists) };
+      if (!checkExists.activated) {
+        throw new Error(
+          'This account has been disabled. Contact support if you believe this is a mistake.'
+        );
+      }
+
+      const ensuredUser = await this._userService.ensureSuperAdmin(
+        checkExists
+      );
+      return { jwt: await this.jwt(ensuredUser) };
     }
 
     return { token };

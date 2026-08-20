@@ -18,6 +18,7 @@ services:
       TEMPORAL_ADDRESS: '${TEMPORAL_ADDRESS}'
       IS_GENERAL: '${IS_GENERAL}'
       DISABLE_REGISTRATION: '${DISABLE_REGISTRATION}'
+      SUPER_ADMIN_USER: '${SUPER_ADMIN_USER}'
 
       # === Storage Settings
       # STORAGE_PROVIDER: 'local'
