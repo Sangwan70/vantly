@@ -286,6 +286,18 @@ export class SubscriptionRepository {
       isLifetime: boolean;
     }
   ) {
+    // The SubscriptionTier enum has no FREE value - FREE is represented by
+    // the absence of a subscription row, same convention deleteSubscription()
+    // already uses (modifySubscription() for the side effects, then a hard
+    // delete of the row) - so mirror that instead of writing an invalid enum.
+    if (data.tier === 'FREE') {
+      return this._subscription.model.subscription.deleteMany({
+        where: {
+          organizationId: orgId,
+        },
+      });
+    }
+
     return this._subscription.model.subscription.upsert({
       where: {
         organizationId: orgId,
