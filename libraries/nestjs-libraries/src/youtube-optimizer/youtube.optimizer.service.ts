@@ -843,14 +843,27 @@ export class YoutubeOptimizerService {
             const id = `seo:${video.id}`;
             if (!dismissedSet.has(id)) {
               const parsed: YoutubeSeoSuggestions = JSON.parse(seoCached);
-              cardsForVideo.push({
-                id,
-                type: 'seo',
-                videoId: video.id,
-                videoTitle: video.title,
-                videoThumbnail: video.thumbnail,
-                tags: parsed.tags,
-              });
+              // Filtered through a type guard (not just `parsed.tags`
+              // directly) so a malformed/older cache entry can't crash the
+              // whole feed, and so this compiles cleanly against
+              // SeoInsight's required { tag, relevance } shape regardless of
+              // how loosely JSON.parse's result is typed.
+              const tags = (parsed.tags || []).filter(
+                (tag): tag is { tag: string; relevance: number } =>
+                  !!tag &&
+                  typeof tag.tag === 'string' &&
+                  typeof tag.relevance === 'number'
+              );
+              if (tags.length) {
+                cardsForVideo.push({
+                  id,
+                  type: 'seo',
+                  videoId: video.id,
+                  videoTitle: video.title,
+                  videoThumbnail: video.thumbnail,
+                  tags,
+                });
+              }
             }
           }
 
