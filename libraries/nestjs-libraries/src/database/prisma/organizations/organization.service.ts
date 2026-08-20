@@ -91,6 +91,24 @@ export class OrganizationService {
     return this._organizationRepository.getOrgByCustomerId(customerId);
   }
 
+  getOrgByRazorpaySubscriptionId(razorpaySubscriptionId: string) {
+    return this._organizationRepository.getOrgByRazorpaySubscriptionId(
+      razorpaySubscriptionId
+    );
+  }
+
+  updateRazorpaySubscription(
+    organizationId: string,
+    razorpaySubscriptionId: string,
+    razorpaySubscriptionStatus?: string
+  ) {
+    return this._organizationRepository.updateRazorpaySubscription(
+      organizationId,
+      razorpaySubscriptionId,
+      razorpaySubscriptionStatus
+    );
+  }
+
   async inviteTeamMember(org: Organization, user: User, body: AddTeamMemberDto) {
     const timeLimit = dayjs().add(2, 'day').format('YYYY-MM-DD HH:mm:ss');
     const id = makeId(5);

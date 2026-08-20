@@ -28,6 +28,7 @@ import { FinishTrial } from '@gitroom/frontend/components/billing/finish.trial';
 import { newDayjs } from '@gitroom/frontend/components/layout/set.timezone';
 import { useDubClickId } from '@gitroom/frontend/components/layout/dubAnalytics';
 import { LogoutComponent } from '@gitroom/frontend/components/layout/logout.component';
+import { startCheckoutFromResponse } from '@gitroom/react/helpers/razorpay-checkout';
 
 export const Prorate: FC<{
   period: 'MONTHLY' | 'YEARLY';
@@ -379,17 +380,18 @@ export const MainBillingComponent: FC<{
           return;
         }
         setLoading(true);
-        const { url, portal, blocked } = await (
-          await fetch('/billing/subscribe', {
-            method: 'POST',
-            body: JSON.stringify({
-              period: monthlyOrYearly === 'on' ? 'YEARLY' : 'MONTHLY',
-              utm,
-              billing,
-              ...(dub ? { dub } : {}),
-            }),
-          })
-        ).json();
+        const { url, portal, blocked, razorpay_subscription_id, razorpay_key_id } =
+          await (
+            await fetch('/billing/subscribe', {
+              method: 'POST',
+              body: JSON.stringify({
+                period: monthlyOrYearly === 'on' ? 'YEARLY' : 'MONTHLY',
+                utm,
+                billing,
+                ...(dub ? { dub } : {}),
+              }),
+            })
+          ).json();
         if (blocked) {
           setLoading(false);
           await deleteDialog(
@@ -409,7 +411,17 @@ export const MainBillingComponent: FC<{
                 monthlyOrYearly === 'on' ? 'year_price' : 'month_price'
               ],
           });
-          window.location.href = url;
+          // RazorPay: open Checkout.js in a modal (handler-callback, not a
+          // redirect - see razorpay-checkout.ts's top docstring). Stripe:
+          // unchanged plain redirect to the Checkout Session URL, which
+          // already has success/cancel destinations baked in server-side.
+          await startCheckoutFromResponse(
+            { url, razorpay_subscription_id, razorpay_key_id },
+            {
+              successUrl: `${window.location.origin}/launches?onboarding=true&trialStart=true`,
+              cancelUrl: `${window.location.origin}/billing?cancel=true`,
+            }
+          );
           return;
         }
         if (portal) {

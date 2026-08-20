@@ -86,6 +86,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/auth/login', nextUrl.href));
   }
 
+  // Public marketing pages: let logged-out visitors straight through instead
+  // of bouncing them to /auth. Logged-in users are unaffected by this check -
+  // they still get redirected from `/` to the app further below.
+  if (
+    (nextUrl.pathname === '/' || nextUrl.pathname === '/pricing') &&
+    !authCookie
+  ) {
+    return topResponse;
+  }
+
   const org = nextUrl.searchParams.get('org');
   const url = new URL(nextUrl).search;
   if (!nextUrl.pathname.startsWith('/auth') && !authCookie) {

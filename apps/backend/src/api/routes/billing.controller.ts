@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpException, Param, Post, Req } from '@nestjs/common';
 import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { StripeService } from '@gitroom/nestjs-libraries/services/stripe.service';
+import { RazorpayService } from '@gitroom/nestjs-libraries/services/razorpay.service';
 import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
 import { Organization, User } from '@prisma/client';
 import { BillingSubscribeDto } from '@gitroom/nestjs-libraries/dtos/billing/billing.subscribe.dto';
@@ -19,6 +20,7 @@ export class BillingController {
   constructor(
     private _subscriptionService: SubscriptionService,
     private _stripeService: StripeService,
+    private _razorpayService: RazorpayService,
     private _notificationService: NotificationService,
     private _usersService: UsersService
   ) {}
@@ -29,6 +31,15 @@ export class BillingController {
       user.id
     );
     return !!other;
+  }
+
+  // Gateway selection is a single global env var, read at request time (not
+  // build time) - see razorpay.service.ts's top docstring and the delivery
+  // notes for why this differs from AutoGPT's split
+  // backend-var/NEXT_PUBLIC_-var approach. Defaults to Stripe so existing
+  // deployments with no PAYMENT_GATEWAY set keep working unchanged.
+  private isRazorpay(): boolean {
+    return process.env.PAYMENT_GATEWAY === 'razorpay';
   }
 
   @Get('/check/:id')
@@ -105,6 +116,17 @@ export class BillingController {
     }
 
     const uniqueId = req?.cookies?.track;
+
+    if (this.isRazorpay()) {
+      return this._razorpayService.subscribe(
+        uniqueId,
+        org.id,
+        user.id,
+        body,
+        org.allowTrial
+      );
+    }
+
     return this._stripeService.subscribe(
       uniqueId,
       org.id,
@@ -142,6 +164,10 @@ export class BillingController {
       `Organization ${org.name} has cancelled their subscription because: ${body.feedback}`,
       user.email
     );
+
+    if (this.isRazorpay()) {
+      return this._razorpayService.setToCancel(org.id);
+    }
 
     return this._stripeService.setToCancel(org.id);
   }

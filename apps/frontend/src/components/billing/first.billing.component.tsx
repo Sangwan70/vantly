@@ -28,6 +28,8 @@ import { useModals } from '@gitroom/frontend/components/layout/new-modal';
 import useCookie from 'react-use-cookie';
 import { LogoutComponent } from '@gitroom/frontend/components/layout/logout.component';
 import { DeveloperIconComponent } from '@gitroom/frontend/components/developer/developer.icon.component';
+import { startCheckoutFromResponse } from '@gitroom/react/helpers/razorpay-checkout';
+import { deleteDialog } from '@gitroom/react/helpers/delete.dialog';
 
 const ModeComponent = dynamic(
   () => import('@gitroom/frontend/components/layout/mode.component'),
@@ -47,12 +49,14 @@ const EmbeddedBilling = dynamic(
 );
 
 export const FirstBillingComponent = () => {
-  const { stripeClient } = useVariables();
+  const { stripeClient, paymentGateway } = useVariables();
+  const isRazorpay = paymentGateway === 'razorpay';
   const user = useUser();
   const dub = useDubClickId();
   const [stripe, setStripe] = useState<null | Promise<Stripe>>(null);
   const [tier, setTier] = useState('STANDARD');
   const [period, setPeriod] = useState('MONTHLY');
+  const [razorpayLoading, setRazorpayLoading] = useState(false);
   const fetch = useFetch();
   const modals = useModals();
   const t = useT();
@@ -60,10 +64,18 @@ export const FirstBillingComponent = () => {
   const [datafast_session_id] = useCookie('datafast_session_id', '');
 
   useEffect(() => {
-    setStripe(loadStripe(stripeClient));
+    // Stripe Elements (embedded checkout) has no RazorPay equivalent - only
+    // load the Stripe.js client when Stripe is the active gateway.
+    if (!isRazorpay) {
+      setStripe(loadStripe(stripeClient));
+    }
   }, []);
 
   const loadCheckout = useCallback(async () => {
+    // RazorPay has no embedded/inline checkout widget (no client_secret
+    // concept) - subscribeWithRazorpay() below drives that flow instead,
+    // triggered by an explicit button click rather than auto-fetched here.
+    if (isRazorpay) return null;
     return (
       await fetch('/billing/embedded', {
         method: 'POST',
@@ -78,6 +90,46 @@ export const FirstBillingComponent = () => {
       })
     ).json();
   }, [tier, period]);
+
+  // RazorPay Standard Checkout (Checkout.js modal) - the counterpart to the
+  // Stripe Elements embedded widget below. Only fires on explicit user
+  // action (button click), unlike the Stripe path's auto-fetch-on-select,
+  // since it creates a real RazorPay Subscription server-side rather than
+  // just fetching a client_secret to render a form.
+  const subscribeWithRazorpay = useCallback(async () => {
+    setRazorpayLoading(true);
+    try {
+      const data = await (
+        await fetch('/billing/subscribe', {
+          method: 'POST',
+          body: JSON.stringify({
+            billing: tier,
+            period,
+            ...(dub ? { dub } : {}),
+          }),
+        })
+      ).json();
+
+      if (data.blocked) {
+        await deleteDialog(
+          t(
+            'billing_other_account_subscribed',
+            'Another account with this email already has an active subscription. Please log off and sign in to that account to manage your subscription.'
+          ),
+          t('ok', 'OK'),
+          t('already_subscribed', 'Already subscribed')
+        );
+        return;
+      }
+
+      await startCheckoutFromResponse(data, {
+        successUrl: `${window.location.origin}/launches?onboarding=true&trialStart=true`,
+        cancelUrl: `${window.location.origin}/billing?cancel=true`,
+      });
+    } finally {
+      setRazorpayLoading(false);
+    }
+  }, [tier, period, dub]);
 
   const showYouTube = () => {
     modals.openModal({
@@ -211,6 +263,27 @@ export const FirstBillingComponent = () => {
                 'billing_other_account_subscribed',
                 'Another account with this email already has an active subscription. Please log off and sign in to that account to manage your subscription.'
               )}
+            </div>
+          ) : isRazorpay ? (
+            <div className="mt-[24px] p-[24px] rounded-[20px] border-[1.5px] border-newColColor flex flex-col gap-[16px]">
+              <div className="text-[16px] font-[500]">
+                {t(
+                  'billing_razorpay_summary',
+                  `You're subscribing to the ${capitalize(tier)} plan, billed ${
+                    period === 'MONTHLY' ? 'monthly' : 'yearly'
+                  } in INR via RazorPay.`
+                )}
+              </div>
+              <button
+                type="button"
+                disabled={razorpayLoading}
+                onClick={subscribeWithRazorpay}
+                className="h-[48px] px-[24px] rounded-[12px] bg-boxFocused text-textItemFocused font-[600] disabled:opacity-60"
+              >
+                {razorpayLoading
+                  ? t('billing_loading', 'Loading...')
+                  : t('billing_subscribe_with_razorpay', 'Subscribe with RazorPay')}
+              </button>
             </div>
           ) : !isLoading && data && stripe ? (
             <EmbeddedBilling

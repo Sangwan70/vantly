@@ -1,0 +1,17 @@
+// Lean stylesheet for the public marketing route group. Deliberately does
+// NOT import the full app global.scss (which pulls in the 397KB polonto.css
+// editor stylesheet and other app-only concerns) - marketing pages only need
+// the real brand color tokens plus Tailwind.
+@use '../colors.scss';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--new-bgColor);
+}

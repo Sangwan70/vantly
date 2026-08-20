@@ -328,6 +328,32 @@ export class OrganizationRepository {
     });
   }
 
+  getOrgByRazorpaySubscriptionId(razorpaySubscriptionId: string) {
+    return this._organization.model.organization.findFirst({
+      where: {
+        razorpaySubscriptionId,
+      },
+    });
+  }
+
+  updateRazorpaySubscription(
+    organizationId: string,
+    razorpaySubscriptionId: string,
+    razorpaySubscriptionStatus?: string
+  ) {
+    return this._organization.model.organization.update({
+      where: {
+        id: organizationId,
+      },
+      data: {
+        razorpaySubscriptionId,
+        ...(razorpaySubscriptionStatus
+          ? { razorpaySubscriptionStatus }
+          : {}),
+      },
+    });
+  }
+
   async setStreak(organizationId: string, type: 'start' | 'end') {
     try {
       await this._organization.model.organization.update({

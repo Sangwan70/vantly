@@ -14,6 +14,16 @@ model Organization {
   description         String?
   apiKey              String?
   paymentId           String?
+  // RazorPay recurring-subscription tracking (mirrors paymentId's role but
+  // for the RazorPay gateway - see razorpay.service.ts). RazorPay has no
+  // "customer" object the way Stripe does, so paymentId is populated with a
+  // synthetic `rzp_<organizationId>` key for RazorPay orgs purely so the
+  // existing paymentId-keyed helpers (SubscriptionRepository.*ByCustomerId,
+  // modifySubscription, deleteSubscription) keep working unmodified across
+  // both gateways. razorpaySubscriptionId is the real RazorPay Subscription
+  // id and is what webhook.controller.ts actually resolves an org by.
+  razorpaySubscriptionId     String?
+  razorpaySubscriptionStatus String?
   streakSince         DateTime?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
@@ -47,6 +57,7 @@ model Organization {
   @@index([apiKey])
   @@index([streakSince])
   @@index([paymentId])
+  @@index([razorpaySubscriptionId])
 }
 
 model Tags {

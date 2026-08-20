@@ -32,6 +32,8 @@ interface VariableContextInterface {
   extensionId: string;
   googleAdsId?: string;
   googleAdsTrialTracking?: string;
+  paymentGateway: string;
+  razorpayKeyId: string;
 }
 const VariableContext = createContext({
   stripeClient: '',
@@ -63,6 +65,8 @@ const VariableContext = createContext({
   transloadit: [],
   sentryDsn: '',
   extensionId: '',
+  paymentGateway: 'stripe',
+  razorpayKeyId: '',
 } as VariableContextInterface);
 export const VariableContextComponent: FC<
   VariableContextInterface & {

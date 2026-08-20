@@ -5,6 +5,8 @@ import { UsersController } from '@gitroom/backend/api/routes/users.controller';
 import { AuthMiddleware } from '@gitroom/backend/services/auth/auth.middleware';
 import { StripeController } from '@gitroom/backend/api/routes/stripe.controller';
 import { StripeService } from '@gitroom/nestjs-libraries/services/stripe.service';
+import { RazorpayController } from '@gitroom/backend/api/routes/razorpay.controller';
+import { RazorpayService } from '@gitroom/nestjs-libraries/services/razorpay.service';
 import { AnalyticsController } from '@gitroom/backend/api/routes/analytics.controller';
 import { PoliciesGuard } from '@gitroom/backend/services/auth/permissions/permissions.guard';
 import { PermissionsService } from '@gitroom/backend/services/auth/permissions/permissions.service';
@@ -72,6 +74,7 @@ const authenticatedController = [
   controllers: [
     RootController,
     StripeController,
+    RazorpayController,
     AuthController,
     PublicController,
     MonitorController,
@@ -83,6 +86,7 @@ const authenticatedController = [
   providers: [
     AuthService,
     StripeService,
+    RazorpayService,
     OpenaiService,
     ExtractContentService,
     AuthMiddleware,

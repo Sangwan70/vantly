@@ -2,6 +2,15 @@ export interface PricingInnerInterface {
   current: string;
   month_price: number;
   year_price: number;
+  // Optional INR display prices for the RazorPay gateway (PAYMENT_GATEWAY=
+  // razorpay) - deliberately left undefined here rather than derived via a
+  // conversion rate, since the real number that matters is whatever amount
+  // was baked into the corresponding RAZORPAY_{TIER}_PLAN_{PERIOD} Plan in
+  // the RazorPay Dashboard. Fill these in per-tier to match your real Plan
+  // amounts if you want the pricing UI to show INR instead of "billed in
+  // INR - final price shown at checkout".
+  inr_month_price?: number;
+  inr_year_price?: number;
   channel?: number;
   posts_per_month: number;
   team_members: boolean;
