@@ -26,7 +26,19 @@ export class OrganizationService {
       body,
       this._notificationsService.hasEmailProvider(),
       ip,
-      userAgent
+      userAgent,
+      OrganizationService.isSuperAdminEmail(body.email)
+    );
+  }
+
+  // A user registering with the email configured in SUPER_ADMIN_USER is
+  // automatically granted super admin access on account creation.
+  private static isSuperAdminEmail(email: string) {
+    const superAdminEmail = process.env.SUPER_ADMIN_USER;
+    return (
+      !!superAdminEmail &&
+      !!email &&
+      email.toLowerCase() === superAdminEmail.trim().toLowerCase()
     );
   }
 

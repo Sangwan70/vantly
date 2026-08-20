@@ -606,6 +606,188 @@ export const Subscription = () => {
     </Select>
   );
 };
+const AdjustSubscriptionModal: FC<{ close: () => void }> = ({ close }) => {
+  const fetch = useFetch();
+  const t = useT();
+  const toaster = useToaster();
+  const currentUser = useUser();
+  const [tier, setTier] = useState(currentUser?.tier?.current || 'FREE');
+  const [period, setPeriod] = useState('MONTHLY');
+  const [totalChannels, setTotalChannels] = useState(
+    String(pricing[currentUser?.tier?.current || 'FREE']?.channel ?? 0)
+  );
+  const [isLifetime, setIsLifetime] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const handleTierChange = useCallback((e: any) => {
+    const value = e.target.value;
+    setTier(value);
+    setTotalChannels(String(pricing[value]?.channel ?? 0));
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    const channels = Number(totalChannels);
+    if (!Number.isInteger(channels) || channels < 0) {
+      toaster.show(
+        t('invalid_channels', 'Enter a valid channel count'),
+        'warning'
+      );
+      return;
+    }
+    if (
+      !(await deleteDialog(
+        t(
+          'adjust_subscription_confirm',
+          `This will directly set the impersonated organization's plan to ${tier} (${channels} channels, ${period.toLowerCase()}${
+            isLifetime ? ', lifetime' : ''
+          }), bypassing Stripe. Use this only for manual grants, refunds, or corrections.`
+        ),
+        t('yes_apply', 'Yes, apply'),
+        t('adjust_subscription_title', 'Adjust Subscription?'),
+        t('no_cancel', 'No, cancel')
+      ))
+    ) {
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/billing/admin-set-subscription', {
+        method: 'POST',
+        body: JSON.stringify({
+          tier,
+          totalChannels: channels,
+          period,
+          isLifetime,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(await res.text().catch(() => ''));
+      }
+      toaster.show(t('subscription_updated', 'Subscription updated'));
+      window.location.reload();
+    } catch {
+      setSaving(false);
+      toaster.show(
+        t(
+          'adjust_subscription_failed',
+          'The update failed and nothing was changed'
+        ),
+        'warning'
+      );
+    }
+  }, [tier, period, totalChannels, isLifetime]);
+
+  return (
+    <div className="flex flex-col gap-[16px] min-w-[420px]">
+      <div className="text-newTextColor/60 text-[13px]">
+        {t(
+          'adjust_subscription_subtitle',
+          "Directly sets this organization's plan in our database. This does not touch Stripe - use it for manual grants, comps, or corrections, not for regular upgrades/downgrades."
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-[12px]">
+        <Select
+          label={t('plan', 'Plan')}
+          name="adjustTier"
+          disableForm={true}
+          hideErrors={true}
+          value={tier}
+          onChange={handleTierChange}
+        >
+          {Object.keys(pricing).map((key) => (
+            <option key={key} value={key}>
+              {key}
+            </option>
+          ))}
+        </Select>
+        <Select
+          label={t('period', 'Period')}
+          name="adjustPeriod"
+          disableForm={true}
+          hideErrors={true}
+          value={period}
+          onChange={(e) => setPeriod(e.target.value)}
+        >
+          <option value="MONTHLY">{t('monthly', 'Monthly')}</option>
+          <option value="YEARLY">{t('annual', 'Annual')}</option>
+        </Select>
+      </div>
+      <Input
+        label={t('total_channels', 'Total channels')}
+        name="adjustChannels"
+        type="number"
+        disableForm={true}
+        removeError={true}
+        value={totalChannels}
+        onChange={(e) => setTotalChannels(e.target.value)}
+      />
+      <div
+        className="flex items-center gap-[10px] cursor-pointer select-none"
+        onClick={() => setIsLifetime((prev) => !prev)}
+      >
+        <div
+          className={`w-[20px] h-[20px] rounded-[4px] border-2 flex items-center justify-center ${
+            isLifetime ? 'bg-forth border-forth' : 'border-newTextColor/40'
+          }`}
+        >
+          {isLifetime && (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          )}
+        </div>
+        <div className="text-[14px]">
+          {t('mark_as_lifetime', 'Mark as a lifetime deal')}
+        </div>
+      </div>
+      <div className="flex gap-[12px] justify-end">
+        <Button onClick={close} className="rounded-[4px]">
+          {t('close', 'Close')}
+        </Button>
+        <Button
+          onClick={handleSave}
+          loading={saving}
+          className="!bg-blue-700 rounded-[4px]"
+        >
+          {t('apply', 'Apply')}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+const AdjustSubscription = () => {
+  const { openModal } = useModals();
+  const t = useT();
+
+  const handleClick = useCallback(() => {
+    openModal({
+      title: t('adjust_subscription', 'Adjust Subscription'),
+      maxSize: 600,
+      children: (close) => <AdjustSubscriptionModal close={close} />,
+    });
+  }, []);
+
+  return (
+    <div
+      className="px-[10px] rounded-[4px] bg-indigo-700 text-white cursor-pointer whitespace-nowrap"
+      onClick={handleClick}
+    >
+      {t('adjust_subscription', 'Adjust Subscription')}
+    </div>
+  );
+};
+
 const colorOptions = [
   { value: 'INFO', label: 'Info (Blue)', className: 'bg-blue-600' },
   { value: 'WARNING', label: 'Warning (Amber)', className: 'bg-amber-600' },
@@ -847,6 +1029,181 @@ const ImportDebugPost = () => {
       onClick={handleClick}
     >
       {t('import_debug_post', 'Import Debug Post')}
+    </div>
+  );
+};
+
+const BanUser = () => {
+  const fetch = useFetch();
+  const t = useT();
+  const toaster = useToaster();
+  const currentUser = useUser();
+  const [name, setName] = useState('');
+  const [selected, setSelected] = useState<{
+    id: string;
+    name: string;
+    email: string;
+    activated: boolean;
+  } | null>(null);
+  const [working, setWorking] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!name) {
+      return [];
+    }
+    return await (await fetch(`/user/impersonate?name=${name}`)).json();
+  }, [name]);
+
+  const { data } = useSWR(`/ban-search-${name}`, load, {
+    refreshWhenHidden: false,
+    revalidateOnMount: true,
+    revalidateOnReconnect: false,
+    revalidateOnFocus: false,
+    refreshWhenOffline: false,
+    revalidateIfStale: false,
+    refreshInterval: 0,
+  });
+
+  const mapData = useMemo(() => {
+    // one row per user, dedupe by user id, drop the requesting admin
+    const seen = new Set<string>();
+    return (data || [])
+      .filter((curr: any) => curr?.user?.id !== currentUser?.id)
+      .filter((curr: any) => {
+        if (seen.has(curr?.user?.id)) {
+          return false;
+        }
+        seen.add(curr?.user?.id);
+        return true;
+      })
+      .map((curr: any) => ({
+        id: curr?.user?.id,
+        name: curr?.user?.name,
+        email: curr?.user?.email,
+        activated: curr?.user?.activated !== false,
+      }));
+  }, [data, currentUser?.id]);
+
+  const pick = useCallback(
+    (item: {
+      id: string;
+      name: string;
+      email: string;
+      activated: boolean;
+    }) => () => {
+      setSelected(item);
+      setName('');
+    },
+    []
+  );
+
+  const toggleBan = useCallback(async () => {
+    if (!selected) {
+      return;
+    }
+    const willBan = selected.activated;
+    if (
+      !(await deleteDialog(
+        willBan
+          ? t(
+              'ban_user_confirm',
+              `This will immediately block ${selected.email} from logging in. It does not delete any data and can be reversed at any time.`
+            )
+          : t(
+              'unban_user_confirm',
+              `This will restore login access for ${selected.email}.`
+            ),
+        willBan ? t('yes_ban', 'Yes, ban') : t('yes_unban', 'Yes, unban'),
+        willBan ? t('ban_user_title', 'Ban User?') : t('unban_user_title', 'Unban User?'),
+        t('no_cancel', 'No, cancel')
+      ))
+    ) {
+      return;
+    }
+    setWorking(true);
+    try {
+      const res = await fetch(
+        `/admin/users/${selected.id}/${willBan ? 'ban' : 'unban'}`,
+        {
+          method: 'POST',
+        }
+      );
+      if (!res.ok) {
+        throw new Error(await res.text().catch(() => ''));
+      }
+      toaster.show(
+        willBan
+          ? t('user_banned', 'User banned')
+          : t('user_unbanned', 'User unbanned')
+      );
+      setSelected(null);
+    } catch {
+      toaster.show(
+        t('ban_action_failed', 'The action failed and nothing was changed'),
+        'warning'
+      );
+    } finally {
+      setWorking(false);
+    }
+  }, [selected]);
+
+  return (
+    <div className="relative flex items-center gap-[10px]">
+      <div className="flex-1 min-w-[220px]">
+        <Input
+          autoComplete="off"
+          placeholder={t('select_user_to_ban', 'Ban/unban a user')}
+          name="banUser"
+          disableForm={true}
+          label=""
+          removeError={true}
+          value={
+            selected
+              ? `${selected.name ? `${selected.name} - ` : ''}${selected.email}`
+              : name
+          }
+          onChange={(e) => {
+            setSelected(null);
+            setName(e.target.value);
+          }}
+        />
+      </div>
+      <Button
+        onClick={toggleBan}
+        loading={working}
+        disabled={!selected}
+        className={`rounded-[4px] whitespace-nowrap ${
+          selected && !selected.activated ? '' : '!bg-red-700'
+        }`}
+      >
+        {selected && !selected.activated
+          ? t('unban_user', 'Unban User')
+          : t('ban_user', 'Ban User')}
+      </Button>
+      {!!mapData?.length && !selected && (
+        <>
+          <div
+            className="bg-primary/80 fixed start-0 top-0 w-full h-full z-[998]"
+            onClick={() => setName('')}
+          />
+          <div className="absolute top-[100%] start-0 w-max min-w-full max-w-[90vw] bg-sixth border border-customColor6 text-textColor z-[999]">
+            {mapData.map((item: any) => (
+              <div
+                onClick={pick(item)}
+                key={item?.id}
+                className="p-[10px] border-b border-customColor6 hover:bg-tableBorder cursor-pointer whitespace-nowrap truncate"
+              >
+                {t('user_1', 'user:')}
+                {item?.id?.split('-')?.at(-1)} -{' '}
+                {item?.name ? `${item?.name} - ` : ''}
+                {item?.email}
+                {!item?.activated &&
+                  ` (${t('currently_banned', 'currently banned')})`}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 };
@@ -1094,6 +1451,7 @@ export const Impersonate = () => {
                   </div>
                 </div>
                 {user?.tier?.current === 'FREE' && <Subscription />}
+                <AdjustSubscription />
                 {user?.tier?.team_members && <AddTeamMember />}
                 {billingEnabled && <ManageBilling />}
                 <SwitchUser />
@@ -1112,6 +1470,7 @@ export const Impersonate = () => {
                     onChange={(e) => setName(e.target.value)}
                   />
                 </div>
+                <BanUser />
                 <ImportDebugPost />
                 <AddAnnouncement />
                 <ViewErrors />

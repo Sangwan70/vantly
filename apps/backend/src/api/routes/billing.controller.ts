@@ -5,6 +5,7 @@ import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.reque
 import { Organization, User } from '@prisma/client';
 import { BillingSubscribeDto } from '@gitroom/nestjs-libraries/dtos/billing/billing.subscribe.dto';
 import { AdminApplyCouponDto } from '@gitroom/nestjs-libraries/dtos/billing/admin.apply.coupon.dto';
+import { AdminSetSubscriptionDto } from '@gitroom/nestjs-libraries/dtos/billing/admin.set.subscription.dto';
 import { ApiTags } from '@nestjs/swagger';
 import { GetUserFromRequest } from '@gitroom/nestjs-libraries/user/user.from.request';
 import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/notifications/notification.service';
@@ -268,4 +269,27 @@ export class BillingController {
     );
   }
 
+  // Admin override - directly sets the currently-scoped org's plan
+  // (tier/channels/period/lifetime), bypassing Stripe entirely. Meant to be
+  // used while impersonating the target org: GetOrgFromRequest() resolves
+  // to the impersonated org, exactly like add-subscription above.
+  @Post('/admin-set-subscription')
+  async adminSetSubscription(
+    @GetUserFromRequest() user: User,
+    @GetOrgFromRequest() org: Organization,
+    @Body() body: AdminSetSubscriptionDto
+  ) {
+    if (!user.isSuperAdmin) {
+      throw new HttpException('Unauthorized', 400);
+    }
+
+    await this._subscriptionService.adminSetSubscription(org.id, {
+      tier: body.tier,
+      totalChannels: body.totalChannels,
+      period: body.period,
+      isLifetime: !!body.isLifetime,
+    });
+
+    return { success: true };
+  }
 }

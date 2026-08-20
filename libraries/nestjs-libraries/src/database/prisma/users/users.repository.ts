@@ -108,6 +108,17 @@ export class UsersRepository {
     });
   }
 
+  promoteToSuperAdmin(id: string) {
+    return this._user.model.user.update({
+      where: {
+        id,
+      },
+      data: {
+        isSuperAdmin: true,
+      },
+    });
+  }
+
   getUserByEmail(email: string) {
     return this._user.model.user.findFirst({
       where: {
@@ -153,6 +164,20 @@ export class UsersRepository {
       },
       data: {
         activated: true,
+      },
+    });
+  }
+
+  // Repurposes the `activated` flag as a login gate for admin-initiated
+  // bans: a banned user fails the same `!user.activated` check that
+  // pending-email-verification LOCAL accounts already fail on login.
+  deactivateUser(id: string) {
+    return this._user.model.user.update({
+      where: {
+        id,
+      },
+      data: {
+        activated: false,
       },
     });
   }

@@ -265,6 +265,22 @@ export class SubscriptionService {
     };
   }
 
+  async adminSetSubscription(
+    orgId: string,
+    data: {
+      tier: 'FREE' | 'STANDARD' | 'TEAM' | 'PRO' | 'ULTIMATE';
+      totalChannels: number;
+      period: 'MONTHLY' | 'YEARLY';
+      isLifetime: boolean;
+    }
+  ) {
+    // Reuses the existing tier-change side effects (trims over-limit
+    // integrations, toggles team-member access) before persisting the new
+    // subscription record directly via the repository.
+    await this.modifySubscriptionByOrg(orgId, data.totalChannels, data.tier);
+    return this._subscriptionRepository.adminSetSubscription(orgId, data);
+  }
+
   async addSubscription(orgId: string, userId: string, subscription: any) {
     await this._subscriptionRepository.setCustomerId(orgId, userId);
     return this.createOrUpdateSubscription(

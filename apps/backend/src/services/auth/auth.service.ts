@@ -90,7 +90,8 @@ export class AuthService {
         throw new Error('User is not activated');
       }
 
-      return { addedOrg: false, jwt: await this.jwt(user) };
+      const ensuredUser = await this._userService.ensureSuperAdmin(user);
+      return { addedOrg: false, jwt: await this.jwt(ensuredUser) };
     }
 
     const user = await this.loginOrRegisterProvider(
@@ -152,7 +153,12 @@ export class AuthService {
       provider
     );
     if (user) {
-      return user;
+      if (!user.activated) {
+        throw new Error(
+          'This account has been disabled. Contact support if you believe this is a mistake.'
+        );
+      }
+      return this._userService.ensureSuperAdmin(user);
     }
 
     if (!(await this.canRegister(provider))) {

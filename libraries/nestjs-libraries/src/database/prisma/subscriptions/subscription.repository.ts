@@ -5,6 +5,7 @@ import {
 } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
 import dayjs from 'dayjs';
 import { Organization } from '@prisma/client';
+import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
 
 @Injectable()
 export class SubscriptionRepository {
@@ -271,6 +272,42 @@ export class SubscriptionRepository {
       });
       throw err;
     }
+  }
+
+  // Admin override: writes the subscription record directly, bypassing the
+  // Stripe-customerId matching that modifySubscription()/webhook flows
+  // require - an admin grant/correction has no Stripe checkout behind it.
+  adminSetSubscription(
+    orgId: string,
+    data: {
+      tier: 'FREE' | 'STANDARD' | 'TEAM' | 'PRO' | 'ULTIMATE';
+      totalChannels: number;
+      period: 'MONTHLY' | 'YEARLY';
+      isLifetime: boolean;
+    }
+  ) {
+    return this._subscription.model.subscription.upsert({
+      where: {
+        organizationId: orgId,
+      },
+      update: {
+        subscriptionTier: data.tier,
+        totalChannels: data.totalChannels,
+        period: data.period,
+        isLifetime: data.isLifetime,
+        deletedAt: null,
+        cancelAt: null,
+      },
+      create: {
+        organizationId: orgId,
+        subscriptionTier: data.tier,
+        totalChannels: data.totalChannels,
+        period: data.period,
+        isLifetime: data.isLifetime,
+        identifier: makeId(10),
+        deletedAt: null,
+      },
+    });
   }
 
   setCustomerId(orgId: string, customerId: string) {

@@ -156,6 +156,7 @@ export class OrganizationRepository {
             id: true,
             name: true,
             email: true,
+            activated: true,
           },
         },
       },
@@ -278,7 +279,8 @@ export class OrganizationRepository {
     body: Omit<CreateOrgUserDto, 'providerToken'> & { providerId?: string },
     hasEmail: boolean,
     ip: string,
-    userAgent: string
+    userAgent: string,
+    isSuperAdmin = false
   ) {
     return this._organization.model.organization.create({
       data: {
@@ -301,6 +303,7 @@ export class OrganizationRepository {
                 timezone: 0,
                 ip,
                 agent: userAgent,
+                isSuperAdmin,
               },
             },
           },

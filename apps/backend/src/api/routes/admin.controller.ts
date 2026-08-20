@@ -2,6 +2,8 @@ import {
   Controller,
   Get,
   HttpException,
+  Param,
+  Post,
   Query,
 } from '@nestjs/common';
 import { GetUserFromRequest } from '@gitroom/nestjs-libraries/user/user.from.request';
@@ -9,6 +11,7 @@ import { User } from '@prisma/client';
 import { ApiTags } from '@nestjs/swagger';
 import { ErrorsService } from '@gitroom/nestjs-libraries/database/prisma/errors/errors.service';
 import { AdminStatsService } from '@gitroom/nestjs-libraries/database/prisma/admin-stats/admin-stats.service';
+import { UsersService } from '@gitroom/nestjs-libraries/database/prisma/users/users.service';
 import dayjs from 'dayjs';
 
 @ApiTags('Admin')
@@ -16,13 +19,32 @@ import dayjs from 'dayjs';
 export class AdminController {
   constructor(
     private _errorsService: ErrorsService,
-    private _adminStatsService: AdminStatsService
+    private _adminStatsService: AdminStatsService,
+    private _usersService: UsersService
   ) {}
 
   private assertSuperAdmin(user: User) {
     if (!user?.isSuperAdmin) {
       throw new HttpException('Unauthorized', 400);
     }
+  }
+
+  @Post('/users/:id/ban')
+  async banUser(@GetUserFromRequest() user: User, @Param('id') id: string) {
+    this.assertSuperAdmin(user);
+    if (user.id === id) {
+      throw new HttpException('You cannot ban your own account', 400);
+    }
+
+    await this._usersService.banUser(id);
+    return { banned: true };
+  }
+
+  @Post('/users/:id/unban')
+  async unbanUser(@GetUserFromRequest() user: User, @Param('id') id: string) {
+    this.assertSuperAdmin(user);
+    await this._usersService.unbanUser(id);
+    return { banned: false };
   }
 
   @Get('/errors')
