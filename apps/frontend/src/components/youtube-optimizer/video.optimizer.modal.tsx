@@ -75,16 +75,78 @@ const SEVERITY_COLOR: Record<'low' | 'medium' | 'high', string> = {
   high: 'bg-red-500',
 };
 
+// vidIQ-style color-coded score pill - reused for title/thumbnail/tag scores
+// everywhere a "current vs suggested" comparison is shown, so the current
+// value's weakness (or a suggestion's strength) is visible at a glance
+// instead of a bare number.
+export const ScoreBadge: FC<{ score: number; className?: string }> = ({
+  score,
+  className,
+}) => (
+  <div
+    className={clsx(
+      'text-[12px] font-[600] px-[8px] py-[2px] rounded-[4px] text-white shrink-0',
+      score >= 75 ? 'bg-green-600' : score >= 50 ? 'bg-yellow-600' : 'bg-red-600',
+      className
+    )}
+  >
+    {score}
+  </div>
+);
+
+export const formatCount = (value: string | number) => {
+  const num = Number(value || 0);
+  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
+  return String(num);
+};
+
+export const formatRelativeTime = (iso?: string) => {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const seconds = Math.max(0, (Date.now() - then) / 1000);
+  const units: [number, string][] = [
+    [60 * 60 * 24 * 365, 'year'],
+    [60 * 60 * 24 * 30, 'month'],
+    [60 * 60 * 24, 'day'],
+    [60 * 60, 'hour'],
+    [60, 'minute'],
+  ];
+  for (const [unitSeconds, label] of units) {
+    const value = Math.floor(seconds / unitSeconds);
+    if (value >= 1) {
+      return `${value} ${label}${value > 1 ? 's' : ''} ago`;
+    }
+  }
+  return 'just now';
+};
+
 export const VideoOptimizerModal: FC<{
   integrationId: string;
   videoId: string;
   initialTitle: string;
+  // Current thumbnail/view-count/publish-date - already fetched by whatever
+  // list called this modal (video grid, insights feed), so these are passed
+  // straight through rather than re-fetched. Optional since the insights
+  // feed doesn't carry viewCount/publishedAt for its cards.
+  initialThumbnail?: string;
+  viewCount?: string | number;
+  publishedAt?: string;
   // Optimizer Phase 6: the insights feed deep-links straight into the
   // relevant tab (e.g. opening a "better title ready" card should land on
   // Title, not always default to it) - optional so every existing caller
   // (the video grid's plain "Optimize" button) keeps working unchanged.
   initialTab?: 'title' | 'seo' | 'thumbnail' | 'comments' | 'review';
-}> = ({ integrationId, videoId, initialTitle, initialTab }) => {
+}> = ({
+  integrationId,
+  videoId,
+  initialTitle,
+  initialThumbnail,
+  viewCount,
+  publishedAt,
+  initialTab,
+}) => {
   const fetch = useFetch();
   const t = useT();
   const toaster = useToaster();
@@ -474,8 +536,37 @@ export const VideoOptimizerModal: FC<{
 
   return (
     <div className="flex flex-col gap-[16px] max-w-[640px] w-[90vw]">
-      <div className="text-[16px] font-[600] line-clamp-1" title={initialTitle}>
-        {initialTitle}
+      {/* Persistent current-value context, vidIQ-style: the thumbnail/title/
+          stats stay visible across every tab so a suggestion's score always
+          has the current video's own values right next to it to compare
+          against, instead of only showing the new/suggested side. */}
+      <div className="flex items-center gap-[10px]">
+        <div className="w-[80px] aspect-video rounded-[6px] overflow-hidden bg-fifth shrink-0">
+          {initialThumbnail && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={initialThumbnail}
+              alt={initialTitle}
+              className="w-full h-full object-cover"
+            />
+          )}
+        </div>
+        <div className="flex flex-col gap-[2px] min-w-0">
+          <div
+            className="text-[16px] font-[600] line-clamp-2"
+            title={initialTitle}
+          >
+            {initialTitle}
+          </div>
+          {(viewCount !== undefined || publishedAt) && (
+            <div className="text-[12px] opacity-60">
+              {viewCount !== undefined &&
+                `${formatCount(viewCount)} ${t('views', 'views')}`}
+              {viewCount !== undefined && publishedAt && ' · '}
+              {publishedAt && formatRelativeTime(publishedAt)}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-[16px] border-b border-newTableBorder">
@@ -508,9 +599,14 @@ export const VideoOptimizerModal: FC<{
           )}
           {!!titleData && (
             <>
-              <div className="text-[13px] opacity-70">
-                {t('current_title_score', 'Current title score')}:{' '}
-                {titleData.currentScore}/100
+              <div className="flex items-center gap-[8px] p-[10px] rounded-[8px] bg-newTableBorder">
+                <ScoreBadge score={titleData.currentScore} />
+                <div className="text-[13px] line-clamp-1 flex-1" title={initialTitle}>
+                  {initialTitle}
+                </div>
+                <div className="text-[11px] opacity-50 shrink-0">
+                  {t('current', 'current')}
+                </div>
               </div>
               <div className="flex flex-col gap-[10px] max-h-[360px] overflow-y-auto">
                 {titleData.suggestions.map((suggestion, index) => (
@@ -518,17 +614,16 @@ export const VideoOptimizerModal: FC<{
                     key={index}
                     className="flex flex-col gap-[6px] p-[10px] rounded-[8px] bg-newTableBorder"
                   >
-                    <div className="text-[14px] font-[500]">
-                      {suggestion.title}
+                    <div className="flex items-center gap-[8px]">
+                      <ScoreBadge score={suggestion.predictedScore} />
+                      <div className="text-[14px] font-[500] flex-1">
+                        {suggestion.title}
+                      </div>
                     </div>
                     <div className="text-[12px] opacity-70">
                       {suggestion.rationale}
                     </div>
                     <div className="flex items-center gap-[8px]">
-                      <div className="text-[12px] opacity-60">
-                        {t('predicted_score', 'Predicted score')}:{' '}
-                        {suggestion.predictedScore}/100
-                      </div>
                       <div className="flex-1" />
                       <Button
                         loading={applyingTitle === suggestion.title}
@@ -606,10 +701,13 @@ export const VideoOptimizerModal: FC<{
                   {seoData.tags.map((tag) => (
                     <div
                       key={tag.tag}
-                      title={`${t('relevance', 'Relevance')}: ${tag.relevance}`}
-                      className="text-[12px] px-[8px] py-[4px] rounded-full bg-newTableBorder"
+                      className="flex items-center gap-[6px] text-[12px] pl-[8px] pr-[4px] py-[4px] rounded-full bg-newTableBorder"
                     >
                       {tag.tag}
+                      <ScoreBadge
+                        score={tag.relevance}
+                        className="!px-[6px] !py-[1px] !text-[10px]"
+                      />
                     </div>
                   ))}
                 </div>
@@ -633,6 +731,24 @@ export const VideoOptimizerModal: FC<{
 
       {tab === 'thumbnail' && (
         <div className="flex flex-col gap-[12px]">
+          {/* Current thumbnail is always visible, even before generating -
+              otherwise there's nothing to compare a new one against. */}
+          {!thumbnailResult && !!initialThumbnail && (
+            <div className="flex flex-col gap-[4px]">
+              <div className="rounded-[8px] overflow-hidden aspect-video bg-fifth max-w-[280px]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={initialThumbnail}
+                  alt={t('current_thumbnail', 'Current thumbnail')}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="text-[11px] opacity-50">
+                {t('current_thumbnail', 'Current thumbnail')}
+              </div>
+            </div>
+          )}
+
           <Input
             disableForm
             removeError
@@ -654,17 +770,41 @@ export const VideoOptimizerModal: FC<{
 
           {!!thumbnailResult && (
             <>
-              <div className="rounded-[8px] overflow-hidden aspect-video bg-fifth">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={thumbnailResult.imageUrl}
-                  alt={t('generated_thumbnail', 'Generated thumbnail')}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="text-[13px] opacity-70">
-                {t('predicted_score', 'Predicted score')}:{' '}
-                {thumbnailResult.feedback.score}/100
+              <div className="flex items-center gap-[10px]">
+                {!!initialThumbnail && (
+                  <div className="flex flex-col gap-[4px] flex-1 min-w-0">
+                    <div className="rounded-[8px] overflow-hidden aspect-video bg-fifth">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={initialThumbnail}
+                        alt={t('current_thumbnail', 'Current thumbnail')}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="text-[11px] opacity-50">
+                      {t('current', 'current')}
+                    </div>
+                  </div>
+                )}
+                {!!initialThumbnail && (
+                  <div className="text-[18px] opacity-50 shrink-0">→</div>
+                )}
+                <div className="flex flex-col gap-[4px] flex-1 min-w-0">
+                  <div className="rounded-[8px] overflow-hidden aspect-video bg-fifth">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={thumbnailResult.imageUrl}
+                      alt={t('generated_thumbnail', 'Generated thumbnail')}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="flex items-center gap-[6px]">
+                    <ScoreBadge score={thumbnailResult.feedback.score} />
+                    <div className="text-[11px] opacity-50">
+                      {t('new', 'new')}
+                    </div>
+                  </div>
+                </div>
               </div>
               {!!thumbnailResult.feedback.pros.length && (
                 <div className="flex flex-col gap-[4px]">

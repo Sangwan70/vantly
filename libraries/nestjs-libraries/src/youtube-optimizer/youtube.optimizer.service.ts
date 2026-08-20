@@ -69,14 +69,68 @@ const INSIGHTS_COMMENT_VIDEO_LIMIT = 3;
 // standing up a permanent table for it.
 const DISMISSED_INSIGHT_TTL_SECONDS = 60 * 60 * 24 * 90;
 
-type InsightCard = {
-  id: string;
-  type: 'title' | 'seo' | 'comment';
-  videoId: string;
-  videoTitle: string;
-  videoThumbnail: string;
-  message: string;
-};
+// Optimizer Phase 7: how long an auto-populate run "counts" before the gate
+// lets another one fire for the same channel. This is what keeps
+// autoPopulateFeed from being a real-time background scanner - it's a
+// once-a-day (per channel) proof-of-value nudge, not a standing job.
+const AUTO_POPULATE_GATE_SECONDS = 60 * 60 * 24;
+
+// Auto-populate only ever looks at the channel's most recent video(s) - one
+// for a title suggestion, one for an SEO suggestion. Enough to prove Feed
+// works the moment a user opens it without scanning (and spending credits
+// against) the whole library unprompted. Thumbnail generation is
+// deliberately excluded - it's the priciest/slowest of the three (a full
+// image generation vs. a cheap text credit), so auto-populate sticks to the
+// two cheap text suggestions and leaves thumbnails to a deliberate click.
+const AUTO_POPULATE_VIDEO_LIMIT = 2;
+
+// Feed cards carry the actual suggestion data (not just a summary message)
+// so the frontend can render vidIQ-style cards - current-vs-suggested score
+// badges, tag pills, the comment itself - and apply/regenerate right from
+// the feed without a round trip back into the full Optimize modal first.
+type InsightCard =
+  | {
+      id: string;
+      type: 'title';
+      videoId: string;
+      videoTitle: string;
+      videoThumbnail: string;
+      currentTitle: string;
+      currentScore: number;
+      suggestion: { title: string; predictedScore: number };
+    }
+  | {
+      id: string;
+      type: 'seo';
+      videoId: string;
+      videoTitle: string;
+      videoThumbnail: string;
+      tags: { tag: string; relevance: number }[];
+    }
+  | {
+      id: string;
+      type: 'thumbnail';
+      videoId: string;
+      videoTitle: string;
+      videoThumbnail: string;
+      currentThumbnail: string;
+      newThumbnail: string;
+      score: number;
+    }
+  | {
+      id: string;
+      type: 'comment';
+      videoId: string;
+      videoTitle: string;
+      videoThumbnail: string;
+      comment: {
+        id: string;
+        authorDisplayName: string;
+        authorProfileImageUrl: string;
+        text: string;
+        publishedAt: string;
+      };
+    };
 
 // 1-2-5-10-20-50-100... progression, same shape vidIQ/most "progress to next
 // milestone" UIs use - round, meaningful numbers rather than an arbitrary
@@ -335,7 +389,21 @@ export class YoutubeOptimizerService {
         video.description
       );
 
-      return { imageUrl: saved.path, feedback };
+      const result = { imageUrl: saved.path, feedback };
+
+      // Unlike title/SEO this cache is never read to skip a paid generation
+      // (every "Quick Generate" click is still a deliberate new image) - it
+      // only lets the Insights feed surface an "Enhanced Thumbnail" card for
+      // a result the user already generated once in the Optimize modal,
+      // same as the title/seo cards below.
+      await ioRedis.set(
+        `youtube-optimizer:thumbnail:${integrationId}:${videoId}`,
+        JSON.stringify(result),
+        'EX',
+        CACHE_TTL_SECONDS
+      );
+
+      return result;
     } catch (err) {
       throw generationError(err);
     }
@@ -357,11 +425,21 @@ export class YoutubeOptimizerService {
       throw new Error('This integration does not support setting a thumbnail');
     }
 
-    return found.provider.setVideoThumbnail(
+    const result = await found.provider.setVideoThumbnail(
       found.integration.token,
       videoId,
       imageUrl
     );
+
+    // Same reasoning as applyVideoMetadata: once applied, the cached
+    // "enhanced thumbnail" is no longer a suggestion - it's the actual
+    // current thumbnail now, so drop it rather than let it linger and
+    // resurface as a stale Feed card.
+    await ioRedis.del(
+      `youtube-optimizer:thumbnail:${integrationId}:${videoId}`
+    );
+
+    return result;
   }
 
   async applyVideoMetadata(
@@ -612,14 +690,86 @@ export class YoutubeOptimizerService {
     return overview;
   }
 
+  // Optimizer Phase 7: the one deliberate exception to "Feed never spends
+  // credits on its own" (see getInsightsFeed below). The first time a user
+  // opens /feed for a channel - or the first time that day, since the gate
+  // is a 24h Redis key per integration - this silently generates one real
+  // title suggestion and one real SEO suggestion so Feed has something to
+  // show on day one instead of being empty until the user manually opens
+  // Optimize and clicks Generate. This is intentionally NOT wired into
+  // login itself: auth has no per-channel/org context to act on, and this
+  // codebase has no background job runner to do the generation off the
+  // request path - triggering it from the Feed page's first load each
+  // session is the practical equivalent (Feed is now the first thing a
+  // returning user sees) without needing new job infrastructure.
+  //
+  // Gated (SET ... NX) so rapid reloads/re-mounts can't double-trigger, and
+  // every generation call is best-effort - a missing credit balance or a
+  // provider error here must never surface as a Feed page error, it should
+  // just mean fewer auto-generated cards this time.
+  async autoPopulateFeed(org: Organization, integrationId: string) {
+    const gateKey = `youtube-optimizer:auto-populate:${integrationId}`;
+    const acquired = await ioRedis.set(
+      gateKey,
+      '1',
+      'EX',
+      AUTO_POPULATE_GATE_SECONDS,
+      'NX'
+    );
+
+    if (!acquired) {
+      return { triggered: false };
+    }
+
+    try {
+      const found =
+        await this._integrationService.getValidIntegrationAndProvider(
+          org,
+          integrationId
+        );
+
+      if (!found || !found.provider.listVideos) {
+        return { triggered: false };
+      }
+
+      const videoList = await found.provider.listVideos(
+        found.integration.token,
+        found.integration.internalId
+      );
+      const recentVideos = videoList.videos.slice(
+        0,
+        AUTO_POPULATE_VIDEO_LIMIT
+      );
+      const titleVideo = recentVideos[0];
+      const seoVideo = recentVideos[1] || recentVideos[0];
+
+      await Promise.all([
+        titleVideo
+          ? this.getTitleSuggestions(org, integrationId, titleVideo.id).catch(
+              () => undefined
+            )
+          : Promise.resolve(),
+        seoVideo
+          ? this.getSeoSuggestions(org, integrationId, seoVideo.id).catch(
+              () => undefined
+            )
+          : Promise.resolve(),
+      ]);
+
+      return { triggered: true };
+    } catch (err) {
+      return { triggered: false };
+    }
+  }
+
   // Optimizer Phase 6: the proactive "Insights feed" (feature inventory item
   // 1) - dismissible cards surfaced WITHOUT spending any AI credits just
-  // from loading the page. Title/SEO cards only appear for suggestions the
-  // user already generated (and hasn't applied) in that video's optimizer -
-  // this deliberately does NOT auto-generate suggestions for every video in
-  // the background, since that would silently spend credits the user never
-  // asked to spend. Comment cards are a free read, bounded to a handful of
-  // the most recent videos to control YouTube API quota.
+  // from loading the page (autoPopulateFeed above is the one deliberate,
+  // tightly-gated exception). Title/SEO cards appear for any suggestion
+  // that's cached - whether the user generated it by hand in Optimize, or
+  // autoPopulateFeed generated it automatically. Comment cards are a free
+  // read, bounded to a handful of the most recent videos to control
+  // YouTube API quota.
   async getInsightsFeed(
     org: Organization,
     integrationId: string
@@ -650,10 +800,19 @@ export class YoutubeOptimizerService {
     const suggestionCards = (
       await Promise.all(
         recentVideos.map(async (video): Promise<InsightCard[]> => {
-          const [titleCached, seoCached] = await Promise.all([
-            ioRedis.get(`youtube-optimizer:title:${integrationId}:${video.id}`),
-            ioRedis.get(`youtube-optimizer:seo:${integrationId}:${video.id}`),
-          ]);
+          const [titleCached, seoCached, thumbnailCached] = await Promise.all(
+            [
+              ioRedis.get(
+                `youtube-optimizer:title:${integrationId}:${video.id}`
+              ),
+              ioRedis.get(
+                `youtube-optimizer:seo:${integrationId}:${video.id}`
+              ),
+              ioRedis.get(
+                `youtube-optimizer:thumbnail:${integrationId}:${video.id}`
+              ),
+            ]
+          );
 
           const cardsForVideo: InsightCard[] = [];
 
@@ -669,7 +828,12 @@ export class YoutubeOptimizerService {
                   videoId: video.id,
                   videoTitle: video.title,
                   videoThumbnail: video.thumbnail,
-                  message: `A better title is ready: "${top.title}" (predicted ${top.predictedScore}/100 vs current ${parsed.currentScore}/100)`,
+                  currentTitle: video.title,
+                  currentScore: parsed.currentScore,
+                  suggestion: {
+                    title: top.title,
+                    predictedScore: top.predictedScore,
+                  },
                 });
               }
             }
@@ -678,14 +842,34 @@ export class YoutubeOptimizerService {
           if (seoCached) {
             const id = `seo:${video.id}`;
             if (!dismissedSet.has(id)) {
+              const parsed: YoutubeSeoSuggestions = JSON.parse(seoCached);
               cardsForVideo.push({
                 id,
                 type: 'seo',
                 videoId: video.id,
                 videoTitle: video.title,
                 videoThumbnail: video.thumbnail,
-                message:
-                  'An improved description and tag list is ready to apply',
+                tags: parsed.tags,
+              });
+            }
+          }
+
+          if (thumbnailCached) {
+            const id = `thumbnail:${video.id}`;
+            if (!dismissedSet.has(id)) {
+              const parsed: {
+                imageUrl: string;
+                feedback: YoutubeThumbnailFeedback;
+              } = JSON.parse(thumbnailCached);
+              cardsForVideo.push({
+                id,
+                type: 'thumbnail',
+                videoId: video.id,
+                videoTitle: video.title,
+                videoThumbnail: video.thumbnail,
+                currentThumbnail: video.thumbnail,
+                newThumbnail: parsed.imageUrl,
+                score: parsed.feedback.score,
               });
             }
           }
@@ -727,10 +911,13 @@ export class YoutubeOptimizerService {
               videoId: video.id,
               videoTitle: video.title,
               videoThumbnail: video.thumbnail,
-              message: `${unanswered.authorDisplayName}: "${unanswered.text.slice(
-                0,
-                120
-              )}"`,
+              comment: {
+                id: unanswered.id,
+                authorDisplayName: unanswered.authorDisplayName,
+                authorProfileImageUrl: unanswered.authorProfileImageUrl,
+                text: unanswered.text,
+                publishedAt: unanswered.publishedAt,
+              },
             };
           })
         )

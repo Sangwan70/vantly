@@ -197,6 +197,21 @@ export class YoutubeOptimizerController {
     return this._youtubeOptimizerService.getInsightsFeed(org, integrationId);
   }
 
+  // Optimizer Phase 7: called by the Feed page itself on load, not a
+  // user-initiated "Generate" click - deliberately NOT behind the AI
+  // CheckPolicies guard the other suggestion endpoints use, since a 403 here
+  // for a zero-credit org must not surface as a page error. Credit checks
+  // still happen inside the service (via the same getTitleSuggestions/
+  // getSeoSuggestions calls Optimize itself uses) - they just fail
+  // silently here instead of showing the user an error toast.
+  @Post('/:integrationId/auto-populate')
+  autoPopulateFeed(
+    @GetOrgFromRequest() org: Organization,
+    @Param('integrationId') integrationId: string
+  ) {
+    return this._youtubeOptimizerService.autoPopulateFeed(org, integrationId);
+  }
+
   @Post('/:integrationId/insights/:insightId/dismiss')
   dismissInsight(
     @GetOrgFromRequest() org: Organization,

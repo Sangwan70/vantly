@@ -94,6 +94,34 @@ export const useMenuItem = () => {
       path: '/analytics',
     },
     {
+      name: t('feed', 'Feed'),
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 20 20"
+          fill="none"
+        >
+          <path
+            d="M2.5 8.5L10 2.5L17.5 8.5V16.5C17.5 16.9641 17.3156 17.4092 16.9874 17.7374C16.6592 18.0656 16.2141 18.25 15.75 18.25H4.25C3.78587 18.25 3.34075 18.0656 3.01256 17.7374C2.68437 17.4092 2.5 16.9641 2.5 16.5V8.5Z"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M7.5 18.25V11.5H12.5V18.25"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ),
+      path: '/feed',
+    },
+    {
       name: t('optimize', 'Optimize'),
       icon: (
         <svg
