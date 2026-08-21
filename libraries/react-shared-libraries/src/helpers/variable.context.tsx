@@ -32,8 +32,8 @@ interface VariableContextInterface {
   extensionId: string;
   googleAdsId?: string;
   googleAdsTrialTracking?: string;
-  paymentGateway: string;
-  razorpayKeyId: string;
+  paymentGateway?: string;
+  razorpayKeyId?: string;
 }
 const VariableContext = createContext({
   stripeClient: '',
