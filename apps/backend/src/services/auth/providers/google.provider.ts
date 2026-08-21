@@ -20,7 +20,19 @@ export class GoogleProvider extends AuthProviderAbstract {
     const redirectUri = query?.redirect_uri || defaultRedirect();
     return makeClient(redirectUri).generateAuthUrl({
       access_type: 'online',
-      prompt: 'consent',
+      // This is the "Sign in with Google" LOGIN provider (see
+      // auth.controller.ts's /auth/oauth/GOOGLE, resolved via
+      // AuthProviderManager's 'GOOGLE' key) - not the separate YouTube
+      // channel-connect provider in
+      // integrations/social/youtube.provider.ts. `prompt: 'consent'`
+      // forces Google's full consent screen on every single login
+      // attempt, even for a user who already granted these same two
+      // basic scopes (profile/email) minutes earlier - that's what was
+      // showing up as "the token isn't preserved, it sends me back to
+      // Google's login page again". `select_account` still lets a user
+      // with multiple Google accounts choose which one, but skips the
+      // forced re-consent for a scope set Google already approved.
+      prompt: 'select_account',
       state: 'login',
       redirect_uri: redirectUri,
       scope: [

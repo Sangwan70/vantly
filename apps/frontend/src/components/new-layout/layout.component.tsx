@@ -34,7 +34,6 @@ import { AnnouncementBanner } from '@gitroom/frontend/components/layout/announce
 import { Title } from '@gitroom/frontend/components/layout/title';
 import { TopMenu } from '@gitroom/frontend/components/layout/top.menu';
 import { LanguageComponent } from '@gitroom/frontend/components/layout/language.component';
-import { ChromeExtensionComponent } from '@gitroom/frontend/components/layout/chrome.extension.component';
 import NotificationComponent from '@gitroom/frontend/components/notifications/notification.component';
 import { OrganizationSelector } from '@gitroom/frontend/components/layout/organization.selector';
 import { StreakComponent } from '@gitroom/frontend/components/layout/streak.component';
@@ -137,7 +136,6 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                           </div>
                           <div className="w-[1px] h-[20px] bg-blockSeparator" />
                           <LanguageComponent />
-                          <ChromeExtensionComponent />
                           <div className="w-[1px] h-[20px] bg-blockSeparator" />
                           <AttachToFeedbackIcon />
                           <NotificationComponent />

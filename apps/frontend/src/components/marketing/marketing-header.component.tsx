@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { LogoTextComponent } from '@gitroom/frontend/components/ui/logo-text.component';
+import { MarketingAuthNav } from '@gitroom/frontend/components/marketing/marketing-auth-nav.component';
 
 export const MarketingHeader = () => {
   return (
@@ -23,18 +24,7 @@ export const MarketingHeader = () => {
           </Link>
         </nav>
         <div className="flex items-center gap-[8px] md:gap-[12px]">
-          <Link
-            href="/auth/login"
-            className="text-[14px] font-[500] text-textColor/80 hover:text-textColor px-[10px] md:px-[12px] py-[8px] transition-colors"
-          >
-            Log in
-          </Link>
-          <Link
-            href="/auth"
-            className="text-[14px] font-[600] bg-btnPrimary text-white rounded-[8px] px-[14px] md:px-[16px] py-[10px] hover:opacity-90 transition-opacity"
-          >
-            Get started free
-          </Link>
+          <MarketingAuthNav />
         </div>
       </div>
     </header>
