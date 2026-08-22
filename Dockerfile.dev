@@ -1,6 +1,24 @@
 FROM node:22.20-bookworm-slim
 ARG NEXT_PUBLIC_VERSION
 ENV NEXT_PUBLIC_VERSION=$NEXT_PUBLIC_VERSION
+
+# NEXT_PUBLIC_* vars are inlined into the client JS bundle at `next build`
+# time, not read at container runtime - the `environment:` block in
+# docker-compose.yaml only reaches server-side code. Without these
+# ARG/ENV pairs, `next build` below falls back to whatever NEXT_PUBLIC_*
+# values happen to be sitting in .env.local in the build context (a
+# gitignored, developer-local file that still gets COPY'd in), baking
+# `http://localhost/api` etc. into the production bundle for every
+# visitor instead of the real vantly.social values. Must be passed as
+# --build-arg (docker-compose.yaml's build.args, sourced from .env.prod)
+# for every deploy.
+ARG NEXT_PUBLIC_BACKEND_URL
+ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+ARG NEXT_PUBLIC_DISCORD_SUPPORT
+ENV NEXT_PUBLIC_DISCORD_SUPPORT=$NEXT_PUBLIC_DISCORD_SUPPORT
+ARG NEXT_PUBLIC_POLOTNO
+ENV NEXT_PUBLIC_POLOTNO=$NEXT_PUBLIC_POLOTNO
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     make \

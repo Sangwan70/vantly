@@ -3,6 +3,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+      # NEXT_PUBLIC_* vars must be passed as build args, not just runtime
+      # `environment:` below - Next.js inlines them into the client bundle
+      # at `next build` time (see Dockerfile.dev). Without this, the build
+      # picks up whatever's in the gitignored .env.local instead, which is
+      # exactly what shipped `http://localhost/api` to production.
+      args:
+        NEXT_PUBLIC_BACKEND_URL: '${NEXT_PUBLIC_BACKEND_URL}'
+        NEXT_PUBLIC_DISCORD_SUPPORT: '${NEXT_PUBLIC_DISCORD_SUPPORT}'
+        NEXT_PUBLIC_POLOTNO: '${NEXT_PUBLIC_POLOTNO}'
     image: vantly-app:local
     container_name: postiz
     restart: always

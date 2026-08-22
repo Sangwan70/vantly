@@ -27,3 +27,13 @@ reports
 # a permission-denied error, and neither belongs in an image anyway.
 .docker
 _to_delete
+
+# Never bake gitignored, developer-local env files into the image. Next.js
+# auto-loads .env.local during `next build` regardless of NODE_ENV, which
+# previously baked its localhost NEXT_PUBLIC_* values into the production
+# bundle for every visitor (see Dockerfile.dev comment above the
+# NEXT_PUBLIC_* ARG/ENV pairs). .env.prod's real secrets don't belong in
+# an image layer either - it's only ever needed on the host, to resolve
+# docker-compose.yaml's ${...} placeholders via --env-file.
+.env.local
+.env.prod
