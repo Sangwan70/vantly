@@ -122,6 +122,10 @@ services:
 
       # === Misc Settings
       OPENAI_API_KEY: '${OPENAI_API_KEY}'
+      # Signs the SSO handoff token for the "Continue to VantlyUGC" button
+      # (users.controller.ts's GET /user/vantly-ugc-sso). Must match the
+      # VANTLY_SSO_KEY set in vantly-ugc-app's own .env.prod.
+      VANTLY_UGC_SSO_KEY: '${VANTLY_UGC_SSO_KEY}'
       NEXT_PUBLIC_DISCORD_SUPPORT: '${NEXT_PUBLIC_DISCORD_SUPPORT}'
       NEXT_PUBLIC_POLOTNO: '${NEXT_PUBLIC_POLOTNO}'
       API_LIMIT: '${API_LIMIT}'

@@ -79,21 +79,22 @@ export class UsersController {
     return { token };
   }
 
-  @Get('/agent-media-sso')
-  async getAgentMediaSsoUrl(
+  @Get('/vantly-ugc-sso')
+  async getVantlyUgcSsoUrl(
     @GetUserFromRequest() user: User,
     @GetOrgFromRequest() organization: Organization
   ) {
-    if (!process.env.AGENT_MEDIA_SSO_KEY) {
-      throw new HttpException('Agent Media SSO is not configured', 400);
+    if (!process.env.VANTLY_UGC_SSO_KEY) {
+      throw new HttpException('Vantly UGC SSO is not configured', 400);
     }
 
     const token = sign(
       { id: organization.id, displayName: organization.name },
-      process.env.AGENT_MEDIA_SSO_KEY
+      process.env.VANTLY_UGC_SSO_KEY,
+      { expiresIn: '5m' }
     );
 
-    return { url: `https://agent-media.ai/sso/${token}` };
+    return { url: `https://app.vantly-ugc.com/sso/${token}` };
   }
 
   @Get('/self')

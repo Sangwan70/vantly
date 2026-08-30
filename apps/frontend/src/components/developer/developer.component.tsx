@@ -9,30 +9,33 @@ import { MediaBox } from '@gitroom/frontend/components/media/media.component';
 import copy from 'copy-to-clipboard';
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
 
-const useOAuthApp = () => {
+interface OAuthApp {
+  id: string;
+  name: string;
+  description?: string | null;
+  redirectUrl: string;
+  clientId: string;
+  pictureId?: string | null;
+  picture?: { path: string } | null;
+}
+
+const useOAuthApps = () => {
   const fetch = useFetch();
   const load = useCallback(async () => {
     const res = await fetch('/user/oauth-app');
     const text = await res.text();
-    if (!text || text === 'null' || text === 'false') {
-      return null;
-    }
-    return JSON.parse(text);
+    if (!text) return [];
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? (parsed as OAuthApp[]) : [];
   }, []);
-  return useSWR('oauth-app', load, {
+  return useSWR('oauth-apps', load, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     revalidateIfStale: false,
   });
 };
 
-const CopyButton = ({
-  text,
-  label,
-}: {
-  text: string;
-  label: string;
-}) => {
+const CopyButton = ({ text, label }: { text: string; label: string }) => {
   const toaster = useToaster();
   return (
     <button
@@ -61,32 +64,28 @@ const CopyButton = ({
   );
 };
 
-export const DeveloperComponent: FC = () => {
-  const fetch = useFetch();
-  const toaster = useToaster();
-  const decision = useDecisionModal();
-  const modals = useModals();
+const AppForm: FC<{
+  initial?: Partial<OAuthApp>;
+  submitLabel: string;
+  onCancel: () => void;
+  onSubmit: (data: {
+    name: string;
+    description: string;
+    redirectUrl: string;
+    pictureId?: string;
+  }) => void;
+}> = ({ initial, submitLabel, onCancel, onSubmit }) => {
   const t = useT();
-  const { data: app, mutate } = useOAuthApp();
-  const [plaintextSecret, setPlaintextSecret] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState(false);
-
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [redirectUrl, setRedirectUrl] = useState('');
-  const [pictureId, setPictureId] = useState<string | undefined>(undefined);
-  const [picturePath, setPicturePath] = useState<string | undefined>(undefined);
-
-  const startEditing = useCallback(() => {
-    if (!app) return;
-    setName(app.name || '');
-    setDescription(app.description || '');
-    setRedirectUrl(app.redirectUrl || '');
-    setPictureId(app.pictureId || undefined);
-    setPicturePath(app.picture?.path || undefined);
-    setEditing(true);
-  }, [app]);
+  const modals = useModals();
+  const [name, setName] = useState(initial?.name || '');
+  const [description, setDescription] = useState(initial?.description || '');
+  const [redirectUrl, setRedirectUrl] = useState(initial?.redirectUrl || '');
+  const [pictureId, setPictureId] = useState<string | undefined>(
+    initial?.pictureId || undefined
+  );
+  const [picturePath, setPicturePath] = useState<string | undefined>(
+    initial?.picture?.path || undefined
+  );
 
   const changeMedia = useCallback((selected: { id: string; path: string }[]) => {
     const media = Array.isArray(selected) ? selected[0] : selected;
@@ -105,278 +104,354 @@ export const DeveloperComponent: FC = () => {
       size: 'calc(100% - 80px)',
       height: 'calc(100% - 80px)',
       children: (close: () => void) => (
-        <MediaBox
-          setMedia={changeMedia}
-          closeModal={close}
-        />
+        <MediaBox setMedia={changeMedia} closeModal={close} />
       ),
     });
   }, [modals, t, changeMedia]);
 
-  const createApp = useCallback(async () => {
-    if (!name || !redirectUrl) {
-      toaster.show('Name and Redirect URL are required', 'warning');
-      return;
-    }
-    try {
-      const result = await (
-        await fetch('/user/oauth-app', {
-          method: 'POST',
-          body: JSON.stringify({
-            name,
-            description,
-            redirectUrl,
-            pictureId,
-          }),
-        })
-      ).json();
-
-      if (result.clientSecret) {
-        setPlaintextSecret(result.clientSecret);
-        toaster.show(
-          'App created! Copy your client secret now - it will only be shown once.',
-          'success'
-        );
-      }
-      setCreating(false);
-      mutate();
-    } catch {
-      toaster.show('Failed to create app', 'warning');
-    }
-  }, [name, description, redirectUrl, pictureId]);
-
-  const updateApp = useCallback(async () => {
-    try {
-      await fetch('/user/oauth-app', {
-        method: 'PUT',
-        body: JSON.stringify({
-          name,
-          description,
-          redirectUrl,
-          pictureId,
-        }),
-      });
-      toaster.show('App updated', 'success');
-      setEditing(false);
-      mutate();
-    } catch {
-      toaster.show('Failed to update app', 'warning');
-    }
-  }, [name, description, redirectUrl, pictureId]);
-
-  const rotateSecret = useCallback(async () => {
-    const approved = await decision.open({
-      title: 'Rotate Client Secret?',
-      description:
-        'This will generate a new client secret and invalidate the current one. Any integrations using the old secret will stop working.',
-      approveLabel: 'Rotate',
-      cancelLabel: 'Cancel',
-    });
-    if (!approved) return;
-    try {
-      const result = await (
-        await fetch('/user/oauth-app/rotate-secret', { method: 'POST' })
-      ).json();
-      if (result.clientSecret) {
-        setPlaintextSecret(result.clientSecret);
-        toaster.show(
-          'Secret rotated! Copy your new client secret now.',
-          'success'
-        );
-        mutate();
-      }
-    } catch {
-      toaster.show('Failed to rotate secret', 'warning');
-    }
-  }, [decision]);
-
-  const deleteApp = useCallback(async () => {
-    const approved = await decision.open({
-      title: 'Delete OAuth App?',
-      description:
-        'This will delete the OAuth application and revoke all user authorizations. This action cannot be undone.',
-      approveLabel: 'Delete',
-      cancelLabel: 'Cancel',
-    });
-    if (!approved) return;
-    try {
-      await fetch('/user/oauth-app', { method: 'DELETE' });
-      toaster.show('OAuth app deleted', 'success');
-      setPlaintextSecret(null);
-      mutate();
-    } catch {
-      toaster.show('Failed to delete app', 'warning');
-    }
-  }, [decision]);
-
-  if (app === undefined) {
-    return null;
-  }
-
-  // No app yet — show create prompt
-  if (!app && !creating) {
-    return (
-      <div className="flex flex-col gap-[40px]">
-        <div className="text-[14px] text-textColor leading-[1.7]">
-          {t(
-            'oauth_app_note_line1',
-            'Create an OAuth App to let other Postiz users authorize your product to post on their behalf.'
-          )}
-          <br />
-          {t(
-            'oauth_app_note_line2',
-            'After a user completes the OAuth2 flow, you receive a pos_ prefixed token that works everywhere an API Key does — API, MCP, and CLI.'
-          )}
-        </div>
-        <div className="bg-newBgColorInner rounded-[12px] border border-newBorder overflow-hidden">
-          <div className="bg-newBgColorInner px-[20px] py-[14px] border-b border-newBorder flex items-start justify-between gap-[12px]">
-            <div>
-              <div className="text-[15px] font-[600]">
-                {t('oauth_application', 'OAuth Application')}
-              </div>
-              <div className="text-[13px] text-customColor18 mt-[2px]">
-                {t(
-                  'create_an_oauth_application',
-                  'Create an OAuth application to allow third-party integrations with Postiz on behalf of your users.'
-                )}
-              </div>
+  return (
+    <div className="p-[20px] flex flex-col gap-[16px]">
+      <div className="flex flex-col gap-[6px]">
+        <label className="text-[13px] font-[600] text-customColor18">
+          {t('app_name', 'App Name')} *
+        </label>
+        <input
+          className="bg-newBgColorInner border border-newBorder rounded-[8px] px-[16px] h-[44px] text-textColor outline-none"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="My Application"
+          maxLength={100}
+        />
+      </div>
+      <div className="flex flex-col gap-[6px]">
+        <label className="text-[13px] font-[600] text-customColor18">
+          {t('description', 'Description')}
+        </label>
+        <textarea
+          className="bg-newBgColorInner border border-newBorder rounded-[8px] p-[16px] text-textColor outline-none min-h-[80px]"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Describe what your app does"
+          maxLength={500}
+        />
+      </div>
+      <div className="flex flex-col gap-[6px]">
+        <label className="text-[13px] font-[600] text-customColor18">
+          {t('profile_picture', 'Profile Picture')}
+        </label>
+        <div className="flex items-center gap-[12px]">
+          {picturePath ? (
+            <img
+              src={picturePath}
+              alt="App picture"
+              className="w-[48px] h-[48px] rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-[48px] h-[48px] rounded-full bg-btnSimple flex items-center justify-center text-customColor18">
+              ?
             </div>
-            <div className="flex gap-[6px] shrink-0 pt-[2px]">
-              <a
-                className="cursor-pointer px-[16px] h-[36px] bg-[#612BD3] hover:bg-[#5520CB] text-white transition-colors rounded-[8px] text-[13px] font-[600] flex items-center gap-[6px]"
-                href="https://docs.vantly.social/public-api/oauth"
-                target="_blank"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
-                {t('read_the_docs', 'Docs')}
-              </a>
-            </div>
-          </div>
-          <div className="p-[20px]">
-            <button
-              type="button"
-              onClick={() => setCreating(true)}
-              className="cursor-pointer px-[20px] h-[44px] bg-[#612BD3] hover:bg-[#5520CB] transition-colors text-white rounded-[8px] text-[15px] font-[600]"
-            >
-              {t('create_oauth_app', 'Create OAuth App')}
-            </button>
-          </div>
+          )}
+          <button
+            type="button"
+            onClick={openMedia}
+            className="cursor-pointer px-[16px] h-[36px] bg-btnSimple hover:bg-boxHover transition-colors rounded-[8px] text-[13px] font-[600]"
+          >
+            {t('choose_image', 'Choose Image')}
+          </button>
         </div>
       </div>
-    );
-  }
+      <div className="flex flex-col gap-[6px]">
+        <label className="text-[13px] font-[600] text-customColor18">
+          {t('redirect_url', 'Redirect URL')} *
+        </label>
+        <input
+          className="bg-newBgColorInner border border-newBorder rounded-[8px] px-[16px] h-[44px] text-textColor outline-none"
+          value={redirectUrl}
+          onChange={(e) => setRedirectUrl(e.target.value)}
+          placeholder="https://yourapp.com/callback"
+        />
+      </div>
+      <div className="flex gap-[8px]">
+        <button
+          type="button"
+          onClick={() =>
+            onSubmit({ name, description, redirectUrl, pictureId })
+          }
+          className="cursor-pointer px-[20px] h-[44px] bg-[#612BD3] hover:bg-[#5520CB] transition-colors text-white rounded-[8px] text-[15px] font-[600]"
+        >
+          {submitLabel}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="cursor-pointer px-[20px] h-[44px] bg-btnSimple hover:bg-boxHover transition-colors rounded-[8px] text-[15px] font-[600]"
+        >
+          {t('cancel', 'Cancel')}
+        </button>
+      </div>
+    </div>
+  );
+};
 
-  // Create form
-  if (creating && !app) {
-    return (
-      <div className="flex flex-col gap-[40px]">
-        <div className="text-[14px] text-textColor leading-[1.7]">
-          {t(
-            'oauth_app_note_line1',
-            'Create an OAuth App to let other Postiz users authorize your product to post on their behalf.'
-          )}
-          <br />
-          {t(
-            'oauth_app_note_line2',
-            'After a user completes the OAuth2 flow, you receive a pos_ prefixed token that works everywhere an API Key does — API, MCP, and CLI.'
-          )}
-        </div>
-        <div className="bg-newBgColorInner rounded-[12px] border border-newBorder overflow-hidden">
+const AppCard: FC<{
+  app: OAuthApp;
+  plaintextSecret: string | null;
+  onEdit: (data: {
+    name: string;
+    description: string;
+    redirectUrl: string;
+    pictureId?: string;
+  }) => void;
+  onRotate: () => void;
+  onDelete: () => void;
+}> = ({ app, plaintextSecret, onEdit, onRotate, onDelete }) => {
+  const t = useT();
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <div className="bg-newBgColorInner rounded-[12px] border border-newBorder overflow-hidden">
+      {editing ? (
+        <>
           <div className="bg-newBgColorInner px-[20px] py-[14px] border-b border-newBorder">
             <div className="text-[15px] font-[600]">
-              {t('create_oauth_app', 'Create OAuth App')}
+              {t('edit_app', 'Edit App')}
             </div>
-            <div className="text-[13px] text-customColor18 mt-[2px]">
-              {t(
-                'fill_in_the_details_for_your_oauth_application',
-                'Fill in the details for your OAuth application.'
+          </div>
+          <AppForm
+            initial={app}
+            submitLabel={t('save', 'Save')}
+            onCancel={() => setEditing(false)}
+            onSubmit={(data) => {
+              onEdit(data);
+              setEditing(false);
+            }}
+          />
+        </>
+      ) : (
+        <>
+          <div className="bg-newBgColorInner px-[20px] py-[14px] border-b border-newBorder flex items-center gap-[12px]">
+            {app.picture?.path ? (
+              <img
+                src={app.picture.path}
+                alt={app.name}
+                className="w-[40px] h-[40px] rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-[40px] h-[40px] rounded-full bg-btnSimple flex items-center justify-center text-customColor18 text-[16px] font-[600]">
+                {app.name?.[0]?.toUpperCase() || '?'}
+              </div>
+            )}
+            <div>
+              <div className="text-[15px] font-[600]">{app.name}</div>
+              {app.description && (
+                <div className="text-customColor18 text-[13px]">
+                  {app.description}
+                </div>
               )}
             </div>
           </div>
           <div className="p-[20px] flex flex-col gap-[16px]">
-            <div className="flex flex-col gap-[6px]">
-              <label className="text-[13px] font-[600] text-customColor18">
-                {t('app_name', 'App Name')} *
-              </label>
-              <input
-                className="bg-newBgColorInner border border-newBorder rounded-[8px] px-[16px] h-[44px] text-textColor outline-none"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="My Application"
-                maxLength={100}
-              />
+            <div className="flex flex-col gap-[4px]">
+              <div className="text-[13px] font-[600] text-customColor18">
+                {t('redirect_url', 'Redirect URL')}
+              </div>
+              <div className="text-[14px]">{app.redirectUrl}</div>
             </div>
             <div className="flex flex-col gap-[6px]">
-              <label className="text-[13px] font-[600] text-customColor18">
-                {t('description', 'Description')}
-              </label>
-              <textarea
-                className="bg-newBgColorInner border border-newBorder rounded-[8px] p-[16px] text-textColor outline-none min-h-[80px]"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe what your app does"
-                maxLength={500}
-              />
-            </div>
-            <div className="flex flex-col gap-[6px]">
-              <label className="text-[13px] font-[600] text-customColor18">
-                {t('profile_picture', 'Profile Picture')}
-              </label>
-              <div className="flex items-center gap-[12px]">
-                {picturePath ? (
-                  <img
-                    src={picturePath}
-                    alt="App picture"
-                    className="w-[48px] h-[48px] rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-[48px] h-[48px] rounded-full bg-btnSimple flex items-center justify-center text-customColor18">
-                    ?
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={openMedia}
-                  className="cursor-pointer px-[16px] h-[36px] bg-btnSimple hover:bg-boxHover transition-colors rounded-[8px] text-[13px] font-[600]"
-                >
-                  {t('choose_image', 'Choose Image')}
-                </button>
+              <div className="text-[13px] font-[600] text-customColor18">
+                {t('client_id', 'Client ID')}
+              </div>
+              <div className="bg-newBgColorInner border border-newBorder rounded-[8px] px-[16px] h-[44px] flex items-center overflow-hidden">
+                <code className="text-[14px] flex-1 truncate">
+                  {app.clientId}
+                </code>
               </div>
             </div>
             <div className="flex flex-col gap-[6px]">
-              <label className="text-[13px] font-[600] text-customColor18">
-                {t('redirect_url', 'Redirect URL')} *
-              </label>
-              <input
-                className="bg-newBgColorInner border border-newBorder rounded-[8px] px-[16px] h-[44px] text-textColor outline-none"
-                value={redirectUrl}
-                onChange={(e) => setRedirectUrl(e.target.value)}
-                placeholder="https://yourapp.com/callback"
-              />
+              <div className="text-[13px] font-[600] text-customColor18">
+                {t('client_secret', 'Client Secret')}
+              </div>
+              <div className="bg-newBgColorInner border border-newBorder rounded-[8px] px-[16px] h-[44px] flex items-center overflow-hidden">
+                {plaintextSecret ? (
+                  <code className="text-[14px] flex-1 truncate">
+                    {plaintextSecret}
+                  </code>
+                ) : (
+                  <span className="text-customColor18 text-[13px]">
+                    {t(
+                      'secret_only_shown_on_creation',
+                      'Secret is only shown on creation or rotation'
+                    )}
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="flex gap-[8px]">
+            <div className="flex gap-[8px] flex-wrap">
+              <CopyButton text={app.clientId} label={t('copy_id', 'Copy ID')} />
+              {plaintextSecret && (
+                <CopyButton
+                  text={plaintextSecret}
+                  label={t('copy_secret', 'Copy Secret')}
+                />
+              )}
               <button
                 type="button"
-                onClick={createApp}
-                className="cursor-pointer px-[20px] h-[44px] bg-[#612BD3] hover:bg-[#5520CB] transition-colors text-white rounded-[8px] text-[15px] font-[600]"
+                onClick={() => setEditing(true)}
+                className="cursor-pointer px-[16px] h-[36px] bg-btnSimple hover:bg-boxHover transition-colors rounded-[8px] text-[13px] font-[600] flex items-center gap-[6px]"
               >
-                {t('create', 'Create')}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                {t('edit_app', 'Edit App')}
               </button>
               <button
                 type="button"
-                onClick={() => setCreating(false)}
-                className="cursor-pointer px-[20px] h-[44px] bg-btnSimple hover:bg-boxHover transition-colors rounded-[8px] text-[15px] font-[600]"
+                onClick={onRotate}
+                className="cursor-pointer px-[16px] h-[36px] bg-btnSimple hover:bg-boxHover transition-colors rounded-[8px] text-[13px] font-[600] flex items-center gap-[6px]"
               >
-                {t('cancel', 'Cancel')}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6" /><path d="M21.34 15.57a10 10 0 11-.57-8.38L21.5 8" /></svg>
+                {t('rotate_secret', 'Rotate Secret')}
+              </button>
+              <button
+                type="button"
+                onClick={onDelete}
+                className="cursor-pointer px-[16px] h-[36px] bg-red-600 hover:bg-red-700 text-white transition-colors rounded-[8px] text-[13px] font-[600] flex items-center gap-[6px]"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                {t('delete_app', 'Delete App')}
               </button>
             </div>
           </div>
-        </div>
-      </div>
-    );
+        </>
+      )}
+    </div>
+  );
+};
+
+export const DeveloperComponent: FC = () => {
+  const fetch = useFetch();
+  const toaster = useToaster();
+  const decision = useDecisionModal();
+  const t = useT();
+  const { data: apps, mutate } = useOAuthApps();
+  const [plaintextSecrets, setPlaintextSecrets] = useState<Record<string, string>>({});
+  const [creating, setCreating] = useState(false);
+
+  const createApp = useCallback(
+    async (data: {
+      name: string;
+      description: string;
+      redirectUrl: string;
+      pictureId?: string;
+    }) => {
+      if (!data.name || !data.redirectUrl) {
+        toaster.show('Name and Redirect URL are required', 'warning');
+        return;
+      }
+      try {
+        const result = await (
+          await fetch('/user/oauth-app', {
+            method: 'POST',
+            body: JSON.stringify(data),
+          })
+        ).json();
+
+        if (result.clientSecret && result.id) {
+          setPlaintextSecrets((prev) => ({ ...prev, [result.id]: result.clientSecret }));
+          toaster.show(
+            'App created! Copy your client secret now - it will only be shown once.',
+            'success'
+          );
+        }
+        setCreating(false);
+        mutate();
+      } catch {
+        toaster.show('Failed to create app', 'warning');
+      }
+    },
+    [fetch, mutate, toaster]
+  );
+
+  const updateApp = useCallback(
+    async (
+      id: string,
+      data: {
+        name: string;
+        description: string;
+        redirectUrl: string;
+        pictureId?: string;
+      }
+    ) => {
+      try {
+        await fetch(`/user/oauth-app/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        });
+        toaster.show('App updated', 'success');
+        mutate();
+      } catch {
+        toaster.show('Failed to update app', 'warning');
+      }
+    },
+    [fetch, mutate, toaster]
+  );
+
+  const rotateSecret = useCallback(
+    async (id: string) => {
+      const approved = await decision.open({
+        title: 'Rotate Client Secret?',
+        description:
+          'This will generate a new client secret and invalidate the current one. Any integrations using the old secret will stop working.',
+        approveLabel: 'Rotate',
+        cancelLabel: 'Cancel',
+      });
+      if (!approved) return;
+      try {
+        const result = await (
+          await fetch(`/user/oauth-app/${id}/rotate-secret`, { method: 'POST' })
+        ).json();
+        if (result.clientSecret) {
+          setPlaintextSecrets((prev) => ({ ...prev, [id]: result.clientSecret }));
+          toaster.show(
+            'Secret rotated! Copy your new client secret now.',
+            'success'
+          );
+          mutate();
+        }
+      } catch {
+        toaster.show('Failed to rotate secret', 'warning');
+      }
+    },
+    [decision, fetch, mutate, toaster]
+  );
+
+  const deleteApp = useCallback(
+    async (id: string) => {
+      const approved = await decision.open({
+        title: 'Delete OAuth App?',
+        description:
+          'This will delete the OAuth application and revoke all user authorizations. This action cannot be undone.',
+        approveLabel: 'Delete',
+        cancelLabel: 'Cancel',
+      });
+      if (!approved) return;
+      try {
+        await fetch(`/user/oauth-app/${id}`, { method: 'DELETE' });
+        toaster.show('OAuth app deleted', 'success');
+        setPlaintextSecrets((prev) => {
+          const { [id]: _, ...rest } = prev;
+          return rest;
+        });
+        mutate();
+      } catch {
+        toaster.show('Failed to delete app', 'warning');
+      }
+    },
+    [decision, fetch, mutate, toaster]
+  );
+
+  if (apps === undefined) {
+    return null;
   }
 
-  // App exists — show details
   return (
     <div className="flex flex-col gap-[40px]">
       <div className="text-[14px] text-textColor leading-[1.7]">
@@ -390,216 +465,79 @@ export const DeveloperComponent: FC = () => {
           'After a user completes the OAuth2 flow, you receive a pos_ prefixed token that works everywhere an API Key does — API, MCP, and CLI.'
         )}
       </div>
-      {/* App details / edit */}
+
       <div className="bg-newBgColorInner rounded-[12px] border border-newBorder overflow-hidden">
         <div className="bg-newBgColorInner px-[20px] py-[14px] border-b border-newBorder flex items-start justify-between gap-[12px]">
           <div>
             <div className="text-[15px] font-[600]">
-              {t('oauth_application', 'OAuth Application')}
+              {t('oauth_applications', 'OAuth Applications')}
             </div>
             <div className="text-[13px] text-customColor18 mt-[2px]">
               {t(
-                'manage_your_oauth_application',
-                'Manage your OAuth application for third-party integrations.'
+                'create_an_oauth_application',
+                'Create OAuth applications to allow third-party integrations with Vantly on behalf of your users.'
               )}
             </div>
           </div>
           <div className="flex gap-[6px] shrink-0 pt-[2px]">
             <a
-              className="cursor-pointer px-[16px] h-[36px] bg-[#612BD3] hover:bg-[#5520CB] text-white transition-colors rounded-[8px] text-[13px] font-[600] flex items-center gap-[6px]"
+              className="cursor-pointer px-[16px] h-[36px] bg-btnSimple hover:bg-boxHover transition-colors rounded-[8px] text-[13px] font-[600] flex items-center gap-[6px]"
               href="https://docs.vantly.social/public-api/oauth"
               target="_blank"
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
               {t('read_the_docs', 'Docs')}
             </a>
+            {!creating && (
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                className="cursor-pointer px-[16px] h-[36px] bg-[#612BD3] hover:bg-[#5520CB] transition-colors text-white rounded-[8px] text-[13px] font-[600] flex items-center gap-[6px]"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                {t('add_app', 'Add App')}
+              </button>
+            )}
           </div>
         </div>
-
-        {editing ? (
-          <div className="p-[20px] flex flex-col gap-[16px]">
-            <div className="flex flex-col gap-[6px]">
-              <label className="text-[13px] font-[600] text-customColor18">
-                {t('app_name', 'App Name')} *
-              </label>
-              <input
-                className="bg-newBgColorInner border border-newBorder rounded-[8px] px-[16px] h-[44px] text-textColor outline-none"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="My Application"
-                maxLength={100}
-              />
-            </div>
-            <div className="flex flex-col gap-[6px]">
-              <label className="text-[13px] font-[600] text-customColor18">
-                {t('description', 'Description')}
-              </label>
-              <textarea
-                className="bg-newBgColorInner border border-newBorder rounded-[8px] p-[16px] text-textColor outline-none min-h-[80px]"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe what your app does"
-                maxLength={500}
-              />
-            </div>
-            <div className="flex flex-col gap-[6px]">
-              <label className="text-[13px] font-[600] text-customColor18">
-                {t('profile_picture', 'Profile Picture')}
-              </label>
-              <div className="flex items-center gap-[12px]">
-                {picturePath ? (
-                  <img
-                    src={picturePath}
-                    alt="App picture"
-                    className="w-[48px] h-[48px] rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-[48px] h-[48px] rounded-full bg-btnSimple flex items-center justify-center text-customColor18">
-                    ?
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={openMedia}
-                  className="cursor-pointer px-[16px] h-[36px] bg-btnSimple hover:bg-boxHover transition-colors rounded-[8px] text-[13px] font-[600]"
-                >
-                  {t('choose_image', 'Choose Image')}
-                </button>
-              </div>
-            </div>
-            <div className="flex flex-col gap-[6px]">
-              <label className="text-[13px] font-[600] text-customColor18">
-                {t('redirect_url', 'Redirect URL')} *
-              </label>
-              <input
-                className="bg-newBgColorInner border border-newBorder rounded-[8px] px-[16px] h-[44px] text-textColor outline-none"
-                value={redirectUrl}
-                onChange={(e) => setRedirectUrl(e.target.value)}
-                placeholder="https://yourapp.com/callback"
-              />
-            </div>
-            <div className="flex gap-[8px]">
-              <button
-                type="button"
-                onClick={updateApp}
-                className="cursor-pointer px-[20px] h-[44px] bg-[#612BD3] hover:bg-[#5520CB] transition-colors text-white rounded-[8px] text-[15px] font-[600]"
-              >
-                {t('save', 'Save')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditing(false)}
-                className="cursor-pointer px-[20px] h-[44px] bg-btnSimple hover:bg-boxHover transition-colors rounded-[8px] text-[15px] font-[600]"
-              >
-                {t('cancel', 'Cancel')}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="p-[20px] flex flex-col gap-[16px]">
-            <div className="flex items-center gap-[12px]">
-              {app.picture?.path ? (
-                <img
-                  src={app.picture.path}
-                  alt={app.name}
-                  className="w-[48px] h-[48px] rounded-full object-cover"
-                />
-              ) : (
-                <div className="w-[48px] h-[48px] rounded-full bg-btnSimple flex items-center justify-center text-customColor18 text-[18px] font-[600]">
-                  {app.name?.[0]?.toUpperCase() || '?'}
-                </div>
-              )}
-              <div>
-                <div className="text-[15px] font-[600]">{app.name}</div>
-                {app.description && (
-                  <div className="text-customColor18 text-[13px]">
-                    {app.description}
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex flex-col gap-[4px]">
-              <div className="text-[13px] font-[600] text-customColor18">
-                {t('redirect_url', 'Redirect URL')}
-              </div>
-              <div className="text-[14px]">{app.redirectUrl}</div>
-            </div>
-            <div className="flex gap-[8px]">
-              <button
-                type="button"
-                onClick={startEditing}
-                className="cursor-pointer px-[16px] h-[36px] bg-btnSimple hover:bg-boxHover transition-colors rounded-[8px] text-[13px] font-[600] flex items-center gap-[6px]"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                {t('edit_app', 'Edit App')}
-              </button>
-            </div>
+        {apps.length === 0 && !creating && (
+          <div className="p-[20px] text-[14px] text-customColor18">
+            {t('no_oauth_apps_yet', 'No OAuth apps yet — click "Add App" to create one.')}
           </div>
         )}
       </div>
 
-      {/* Credentials */}
-      <div className="bg-newBgColorInner rounded-[12px] border border-newBorder overflow-hidden">
-        <div className="bg-newBgColorInner px-[20px] py-[14px] border-b border-newBorder">
-          <div className="text-[15px] font-[600]">
-            {t('credentials', 'Credentials')}
-          </div>
-        </div>
-        <div className="p-[20px] flex flex-col gap-[16px]">
-          <div className="flex flex-col gap-[6px]">
-            <div className="text-[13px] font-[600] text-customColor18">
-              {t('client_id', 'Client ID')}
+      {creating && (
+        <div className="bg-newBgColorInner rounded-[12px] border border-newBorder overflow-hidden">
+          <div className="bg-newBgColorInner px-[20px] py-[14px] border-b border-newBorder">
+            <div className="text-[15px] font-[600]">
+              {t('create_oauth_app', 'Create OAuth App')}
             </div>
-            <div className="bg-newBgColorInner border border-newBorder rounded-[8px] px-[16px] h-[44px] flex items-center overflow-hidden">
-              <code className="text-[14px] flex-1 truncate">{app.clientId}</code>
-            </div>
-          </div>
-          <div className="flex flex-col gap-[6px]">
-            <div className="text-[13px] font-[600] text-customColor18">
-              {t('client_secret', 'Client Secret')}
-            </div>
-            <div className="bg-newBgColorInner border border-newBorder rounded-[8px] px-[16px] h-[44px] flex items-center overflow-hidden">
-              {plaintextSecret ? (
-                <code className="text-[14px] flex-1 truncate">
-                  {plaintextSecret}
-                </code>
-              ) : (
-                <span className="text-customColor18 text-[13px]">
-                  {t(
-                    'secret_only_shown_on_creation',
-                    'Secret is only shown on creation or rotation'
-                  )}
-                </span>
+            <div className="text-[13px] text-customColor18 mt-[2px]">
+              {t(
+                'fill_in_the_details_for_your_oauth_application',
+                'Fill in the details for your OAuth application.'
               )}
             </div>
           </div>
-          <div className="flex gap-[8px]">
-            <CopyButton text={app.clientId} label={t('copy_id', 'Copy ID')} />
-            {plaintextSecret && (
-              <CopyButton
-                text={plaintextSecret}
-                label={t('copy_secret', 'Copy Secret')}
-              />
-            )}
-            <button
-              type="button"
-              onClick={rotateSecret}
-              className="cursor-pointer px-[16px] h-[36px] bg-btnSimple hover:bg-boxHover transition-colors rounded-[8px] text-[13px] font-[600] flex items-center gap-[6px]"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6" /><path d="M21.34 15.57a10 10 0 11-.57-8.38L21.5 8" /></svg>
-              {t('rotate_secret', 'Rotate Secret')}
-            </button>
-            <button
-              type="button"
-              onClick={deleteApp}
-              className="cursor-pointer px-[16px] h-[36px] bg-red-600 hover:bg-red-700 text-white transition-colors rounded-[8px] text-[13px] font-[600] flex items-center gap-[6px]"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
-              {t('delete_app', 'Delete App')}
-            </button>
-          </div>
+          <AppForm
+            submitLabel={t('create', 'Create')}
+            onCancel={() => setCreating(false)}
+            onSubmit={createApp}
+          />
         </div>
-      </div>
+      )}
+
+      {apps.map((app: OAuthApp) => (
+        <AppCard
+          key={app.id}
+          app={app}
+          plaintextSecret={plaintextSecrets[app.id] || null}
+          onEdit={(data) => updateApp(app.id, data)}
+          onRotate={() => rotateSecret(app.id)}
+          onDelete={() => deleteApp(app.id)}
+        />
+      ))}
     </div>
   );
 };

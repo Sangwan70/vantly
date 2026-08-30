@@ -8,9 +8,25 @@ export class OAuthRepository {
     private _oauthAuth: PrismaRepository<'oAuthAuthorization'>
   ) {}
 
-  getAppByOrgId(orgId: string) {
+  getAppsByOrgId(orgId: string) {
+    return this._oauthApp.model.oAuthApp.findMany({
+      where: {
+        organizationId: orgId,
+        deletedAt: null,
+      },
+      include: {
+        picture: true,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+  }
+
+  getAppByIdAndOrgId(id: string, orgId: string) {
     return this._oauthApp.model.oAuthApp.findFirst({
       where: {
+        id,
         organizationId: orgId,
         deletedAt: null,
       },
@@ -60,6 +76,7 @@ export class OAuthRepository {
   }
 
   async updateApp(
+    id: string,
     orgId: string,
     data: {
       name?: string;
@@ -68,12 +85,7 @@ export class OAuthRepository {
       redirectUrl?: string;
     }
   ) {
-    const app = await this._oauthApp.model.oAuthApp.findFirst({
-      where: {
-        organizationId: orgId,
-        deletedAt: null,
-      },
-    });
+    const app = await this.getAppByIdAndOrgId(id, orgId);
     if (!app) {
       return null;
     }
@@ -86,13 +98,8 @@ export class OAuthRepository {
     });
   }
 
-  async deleteApp(orgId: string) {
-    const app = await this._oauthApp.model.oAuthApp.findFirst({
-      where: {
-        organizationId: orgId,
-        deletedAt: null,
-      },
-    });
+  async deleteApp(id: string, orgId: string) {
+    const app = await this.getAppByIdAndOrgId(id, orgId);
     if (!app) {
       return null;
     }
@@ -104,13 +111,8 @@ export class OAuthRepository {
     });
   }
 
-  async updateClientSecret(orgId: string, newSecret: string) {
-    const app = await this._oauthApp.model.oAuthApp.findFirst({
-      where: {
-        organizationId: orgId,
-        deletedAt: null,
-      },
-    });
+  async updateClientSecret(id: string, orgId: string, newSecret: string) {
+    const app = await this.getAppByIdAndOrgId(id, orgId);
     if (!app) {
       return null;
     }

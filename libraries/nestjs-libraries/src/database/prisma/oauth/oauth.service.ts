@@ -9,22 +9,12 @@ import { AuthService } from '@gitroom/helpers/auth/auth.service';
 export class OAuthService {
   constructor(private _oauthRepository: OAuthRepository) {}
 
-  async getApp(orgId: string) {
-    const app = await this._oauthRepository.getAppByOrgId(orgId);
-    if (!app) return false;
-    const { clientSecret, ...rest } = app;
-    return rest;
+  async getApps(orgId: string) {
+    const apps = await this._oauthRepository.getAppsByOrgId(orgId);
+    return apps.map(({ clientSecret, ...rest }) => rest);
   }
 
   async createApp(orgId: string, dto: CreateOAuthAppDto) {
-    const existing = await this._oauthRepository.getAppByOrgId(orgId);
-    if (existing) {
-      throw new HttpException(
-        'You can only have one OAuth application per organization',
-        HttpStatus.BAD_REQUEST
-      );
-    }
-
     const clientId = 'pca_' + makeId(32);
     const clientSecret = 'pcs_' + makeId(48);
     const encryptedSecret = AuthService.fixedEncryption(clientSecret);
@@ -41,34 +31,38 @@ export class OAuthService {
     return { ...app, clientSecret };
   }
 
-  async updateApp(orgId: string, dto: UpdateOAuthAppDto) {
-    return this._oauthRepository.updateApp(orgId, {
+  async updateApp(id: string, orgId: string, dto: UpdateOAuthAppDto) {
+    const app = await this._oauthRepository.updateApp(id, orgId, {
       ...(dto.name && { name: dto.name }),
       ...(dto.description !== undefined && { description: dto.description }),
       ...(dto.pictureId !== undefined && { pictureId: dto.pictureId }),
       ...(dto.redirectUrl && { redirectUrl: dto.redirectUrl }),
     });
+    if (!app) {
+      throw new HttpException('No OAuth app found', HttpStatus.NOT_FOUND);
+    }
+    return app;
   }
 
-  async deleteApp(orgId: string) {
-    const app = await this._oauthRepository.getAppByOrgId(orgId);
+  async deleteApp(id: string, orgId: string) {
+    const app = await this._oauthRepository.getAppByIdAndOrgId(id, orgId);
     if (!app) {
       throw new HttpException('No OAuth app found', HttpStatus.NOT_FOUND);
     }
     await this._oauthRepository.revokeAllForApp(app.id);
-    await this._oauthRepository.deleteApp(orgId);
+    await this._oauthRepository.deleteApp(id, orgId);
     return { success: true };
   }
 
-  async rotateSecret(orgId: string) {
-    const app = await this._oauthRepository.getAppByOrgId(orgId);
+  async rotateSecret(id: string, orgId: string) {
+    const app = await this._oauthRepository.getAppByIdAndOrgId(id, orgId);
     if (!app) {
       throw new HttpException('No OAuth app found', HttpStatus.NOT_FOUND);
     }
 
     const newSecret = 'pcs_' + makeId(48);
     const encrypted = AuthService.fixedEncryption(newSecret);
-    await this._oauthRepository.updateClientSecret(orgId, encrypted);
+    await this._oauthRepository.updateClientSecret(id, orgId, encrypted);
     return { clientSecret: newSecret };
   }
 

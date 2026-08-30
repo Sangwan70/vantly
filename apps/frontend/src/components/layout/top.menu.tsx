@@ -6,7 +6,7 @@ import { useVariables } from '@gitroom/react/helpers/variable.context';
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
 import { MenuItem } from '@gitroom/frontend/components/new-layout/menu-item';
 import { useModals } from '@gitroom/frontend/components/layout/new-modal';
-import { AgentMediaModal } from '@gitroom/frontend/components/layout/agent.media.modal';
+import { VantlyUgcModal } from '@gitroom/frontend/components/layout/vantly-ugc.modal';
 
 interface MenuItemInterface {
   name: string;
@@ -23,12 +23,12 @@ export const useMenuItem = () => {
   const t = useT();
   const { openModal } = useModals();
 
-  const handleAgentMediaClick = useCallback(() => {
+  const handleVantlyUgcClick = useCallback(() => {
     openModal({
-      title: t('agent_media_title', 'UGC videos by AgentMedia'),
+      title: t('vantly_ugc_title', 'UGC videos by Vantly UGC'),
       closeOnClickOutside: true,
       closeOnEscape: true,
-      children: <AgentMediaModal />,
+      children: <VantlyUgcModal />,
     });
   }, [openModal, t]);
 
@@ -239,7 +239,7 @@ export const useMenuItem = () => {
       path: '#',
       role: ['ADMIN', 'SUPERADMIN', 'USER'],
       requireBilling: true,
-      onClick: handleAgentMediaClick,
+      onClick: handleVantlyUgcClick,
     },
     {
       name: t('affiliate', 'Affiliate'),

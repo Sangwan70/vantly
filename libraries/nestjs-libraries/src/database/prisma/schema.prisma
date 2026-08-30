@@ -869,9 +869,9 @@ model OAuthApp {
   picture        Media?               @relation(fields: [pictureId], references: [id])
   authorizations OAuthAuthorization[]
 
-  @@unique([organizationId, deletedAt])
   @@index([clientId])
   @@index([organizationId])
+  @@index([organizationId, deletedAt])
   @@index([deletedAt])
 }
 

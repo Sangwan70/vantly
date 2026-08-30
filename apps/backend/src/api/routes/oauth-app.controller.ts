@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common';
 import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
 import { Organization } from '@prisma/client';
 import { ApiTags } from '@nestjs/swagger';
@@ -18,8 +18,8 @@ export class OAuthAppController {
 
   @Get('/')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
-  async getApp(@GetOrgFromRequest() org: Organization) {
-    return this._oauthService.getApp(org.id);
+  async getApps(@GetOrgFromRequest() org: Organization) {
+    return this._oauthService.getApps(org.id);
   }
 
   @Post('/')
@@ -31,24 +31,31 @@ export class OAuthAppController {
     return this._oauthService.createApp(org.id, body);
   }
 
-  @Put('/')
+  @Put('/:id')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
   async updateApp(
     @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string,
     @Body() body: UpdateOAuthAppDto
   ) {
-    return this._oauthService.updateApp(org.id, body);
+    return this._oauthService.updateApp(id, org.id, body);
   }
 
-  @Delete('/')
+  @Delete('/:id')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
-  async deleteApp(@GetOrgFromRequest() org: Organization) {
-    return this._oauthService.deleteApp(org.id);
+  async deleteApp(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    return this._oauthService.deleteApp(id, org.id);
   }
 
-  @Post('/rotate-secret')
+  @Post('/:id/rotate-secret')
   @CheckPolicies([AuthorizationActions.Create, Sections.ADMIN])
-  async rotateSecret(@GetOrgFromRequest() org: Organization) {
-    return this._oauthService.rotateSecret(org.id);
+  async rotateSecret(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    return this._oauthService.rotateSecret(id, org.id);
   }
 }
