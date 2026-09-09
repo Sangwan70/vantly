@@ -124,6 +124,7 @@ const PricingPlanEditor: FC<{
   const [form, setForm] = useState<PricingPlanRow>(plan);
   const [saving, setSaving] = useState(false);
   const [reverting, setReverting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const set = useCallback(
     <K extends keyof PricingPlanRow>(key: K, value: PricingPlanRow[K]) =>
@@ -192,6 +193,39 @@ const PricingPlanEditor: FC<{
       toast.show('Failed to reset plan', 'warning');
     } finally {
       setReverting(false);
+    }
+  }, [form.tier]);
+
+  const handleSyncRazorpay = useCallback(async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch(`${PLANS_KEY}/${form.tier}/sync-razorpay`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.message || 'Failed to sync with RazorPay');
+      }
+      const result = await res.json();
+      setForm((prev) => ({
+        ...prev,
+        razorpayPlanIdMonthly: result.razorpayPlanIdMonthly,
+        razorpayPlanIdYearly: result.razorpayPlanIdYearly,
+      }));
+      await mutate(PLANS_KEY);
+      toast.show(
+        result.createdMonthly || result.createdYearly
+          ? 'RazorPay Plan(s) created and saved'
+          : 'Already in sync - both Plan IDs were already set',
+        'success'
+      );
+    } catch (e) {
+      toast.show(
+        e instanceof Error ? e.message : 'Failed to sync with RazorPay',
+        'warning'
+      );
+    } finally {
+      setSyncing(false);
     }
   }, [form.tier]);
 
@@ -436,14 +470,28 @@ const PricingPlanEditor: FC<{
       </div>
 
       <div className="border-t border-newTableBorder pt-[12px]">
-        <div className="text-[13px] font-[600] mb-[4px]">
-          RazorPay Plan IDs
+        <div className="flex items-center justify-between gap-[12px] mb-[4px]">
+          <div className="text-[13px] font-[600]">RazorPay Plan IDs</div>
+          {form.tier !== 'FREE' && (
+            <Button
+              secondary
+              onClick={handleSyncRazorpay}
+              loading={syncing}
+              className="!h-[28px] !px-[10px] !text-[12px]"
+            >
+              Sync to RazorPay
+            </Button>
+          )}
         </div>
         <div className="text-[11px] opacity-60 mb-[10px]">
           RazorPay Plans are immutable once created - leave blank to keep
           using the RAZORPAY_{form.tier}_PLAN_MONTHLY/YEARLY environment
           variables, or paste a freshly-created Plan id here after changing
-          the price above.
+          the price above. &quot;Sync to RazorPay&quot; creates whichever of
+          the two ids below is still blank directly via the RazorPay API
+          (using the price above and the INR rate from Settings -> Payment
+          Gateway) - it never touches an id that's already set, so it's
+          always safe to click again.
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-[12px]">
           <Input
@@ -506,8 +554,40 @@ const PricingPlanEditor: FC<{
 
 export const AdminPricingPlansComponent: FC = () => {
   const user = useUser();
+  const fetch = useFetch();
+  const toast = useToaster();
   const { data, isLoading, mutate } = usePricingPlansAdmin();
   const [activeTier, setActiveTier] = useState<string>(TIER_ORDER[0]);
+  const [syncingAll, setSyncingAll] = useState(false);
+
+  const handleSyncAll = useCallback(async () => {
+    setSyncingAll(true);
+    try {
+      const res = await fetch(`${PLANS_KEY}/sync-razorpay`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        throw new Error('Failed to sync plans with RazorPay');
+      }
+      const results: { tier: string; ok: boolean; error?: string }[] =
+        await res.json();
+      await mutate();
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length) {
+        toast.show(
+          `Synced ${results.length - failed.length}/${results.length} - ` +
+            failed.map((f) => `${f.tier}: ${f.error}`).join('; '),
+          'warning'
+        );
+      } else {
+        toast.show('All plans are in sync with RazorPay', 'success');
+      }
+    } catch {
+      toast.show('Failed to sync plans with RazorPay', 'warning');
+    } finally {
+      setSyncingAll(false);
+    }
+  }, [mutate]);
 
   if (!user?.isSuperAdmin) {
     return (
@@ -526,7 +606,12 @@ export const AdminPricingPlansComponent: FC = () => {
 
   return (
     <div className="flex flex-col gap-[12px] text-textColor max-w-[820px]">
-      <div className="text-[20px] font-[600]">Plans & Pricing</div>
+      <div className="flex items-center justify-between gap-[12px]">
+        <div className="text-[20px] font-[600]">Plans & Pricing</div>
+        <Button secondary onClick={handleSyncAll} loading={syncingAll}>
+          Sync all plans
+        </Button>
+      </div>
       <div className="text-[13px] opacity-70 max-w-[640px]">
         A fixed set of tiers - price, features, and limits are all editable
         below and take effect immediately (feature-gating, Stripe checkout,

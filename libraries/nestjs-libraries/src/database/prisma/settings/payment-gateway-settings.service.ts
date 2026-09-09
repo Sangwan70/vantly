@@ -180,6 +180,20 @@ export class PaymentGatewaySettingsService {
     return { keyId: null, keySecret: null, source: 'none' };
   }
 
+  /** The admin-set INR-per-USD display rate (Settings -> Payment
+   * Gateway), or FALLBACK_INR_TO_USD_RATE if never set - independent of
+   * which gateway is currently active, so a RazorPay Plan can be priced
+   * correctly even while Stripe is the active gateway (e.g. preparing
+   * RazorPay ahead of a switch). resolveCurrencyDisplay() and
+   * getPublicSettings() both delegate here rather than each re-deriving
+   * the same fallback logic. */
+  async getInrToUsdRate(): Promise<number> {
+    const row = await this._paymentGatewaySettingsRepository.getSettings();
+    return row?.inrToUsdRate && row.inrToUsdRate > 0
+      ? row.inrToUsdRate
+      : FALLBACK_INR_TO_USD_RATE;
+  }
+
   /** DB-first, env-fallback display-currency resolution: USD (no
    * conversion) when Stripe is active, INR (using the admin-set rate, or
    * FALLBACK_INR_TO_USD_RATE if unset) when RazorPay is active. Purely for
@@ -191,11 +205,7 @@ export class PaymentGatewaySettingsService {
       return { currencyCode: 'USD', currencySymbol: '$', inrToUsdRate: null };
     }
 
-    const row = await this._paymentGatewaySettingsRepository.getSettings();
-    const rate =
-      row?.inrToUsdRate && row.inrToUsdRate > 0
-        ? row.inrToUsdRate
-        : FALLBACK_INR_TO_USD_RATE;
+    const rate = await this.getInrToUsdRate();
     return { currencyCode: 'INR', currencySymbol: '\u20b9', inrToUsdRate: rate };
   }
 

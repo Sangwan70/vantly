@@ -132,6 +132,82 @@ export class RazorpayService {
   }
 
   /**
+   * Self-serve alternative to manually creating a Plan in RazorPay's own
+   * Dashboard and pasting the id into Admin Panel -> Plans & Pricing (see
+   * getPlanId's doc comment for why that manual step exists at all).
+   * Mirrors vantly-ugc.com's mintMissingGatewayIds: SKIPS - never replaces
+   * - a tier/period that already has a Plan id saved in the DB, since
+   * RazorPay Plans are immutable once created and silently minting a
+   * second one for the same tier/period would risk splitting existing
+   * subscribers across two Plans at two different prices (see
+   * schema.prisma's razorpayPlanIdMonthly doc comment). An env-var
+   * fallback does NOT count as "already synced" here - this always fills
+   * in the DB column so the price is visibly pinned in the admin UI
+   * rather than left to whatever's in the environment.
+   */
+  async syncPlanId(
+    tier: RazorpayTier,
+    period: 'MONTHLY' | 'YEARLY',
+    updatedBy: string
+  ): Promise<{ planId: string; created: boolean }> {
+    const row = await this._pricingPlansService.getByTier(tier);
+    const dbValue =
+      period === 'MONTHLY'
+        ? row?.razorpayPlanIdMonthly
+        : row?.razorpayPlanIdYearly;
+    if (dbValue) {
+      return { planId: dbValue, created: false };
+    }
+
+    if (!(await this.isAvailable())) {
+      throw new Error(
+        'RazorPay credentials are not configured - set them in Settings -> Payment Gateway first.'
+      );
+    }
+
+    const amountUsd = period === 'MONTHLY' ? row?.monthPrice : row?.yearPrice;
+    if (!amountUsd || amountUsd <= 0) {
+      throw new Error(
+        `${row?.displayName || tier} has no ${
+          period === 'MONTHLY' ? 'monthly' : 'yearly'
+        } price set above $0 - set a price in Plans & Pricing before ` +
+          `creating a RazorPay Plan.`
+      );
+    }
+
+    const client = await this.getClient();
+    const rate = await this._paymentGatewaySettingsService.getInrToUsdRate();
+    const amountPaise = Math.round(amountUsd * rate * 100);
+
+    const plan = await client.plans.create({
+      period: period === 'MONTHLY' ? 'monthly' : 'yearly',
+      interval: 1,
+      item: {
+        name: `${row?.displayName || tier} (${
+          period === 'MONTHLY' ? 'Monthly' : 'Yearly'
+        })`,
+        amount: amountPaise,
+        currency: 'INR',
+      },
+      // Every field here must be a string - RazorPay's notes API does not
+      // accept nested objects/numbers (same constraint as subscribe()'s
+      // notes below).
+      notes: { tier, period, service: 'vantly' } as unknown as Record<
+        string,
+        string
+      >,
+    } as any);
+
+    await this._pricingPlansService.setRazorpayPlanId(
+      tier,
+      period,
+      plan.id,
+      updatedBy
+    );
+    return { planId: plan.id, created: true };
+  }
+
+  /**
    * RazorPay has no "Customer" object the way Stripe does (subscriptions
    * are created directly against a Plan). organization.paymentId is reused
    * across both gateways as a generic "external billing key for this org"

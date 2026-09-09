@@ -228,4 +228,50 @@ export class PricingPlansService {
     const envKey = `RAZORPAY_${tier}_PLAN_${period}`;
     return process.env[envKey] || undefined;
   }
+
+  // Writes a freshly-created RazorPay Plan id back into this tier's row -
+  // used only by RazorpayService.syncPlanId() (Admin Panel -> Plans &
+  // Pricing -> "Sync to RazorPay"). Re-sends the full row as the upsert
+  // body (not a partial patch) to match the same full-replace convention
+  // PricingPlansController.updatePricingPlan uses for a regular admin
+  // save, since PricingPlansRepository.upsert's `create` branch spreads
+  // whatever body it's given.
+  async setRazorpayPlanId(
+    tier: PricingPlanTier,
+    period: 'MONTHLY' | 'YEARLY',
+    planId: string,
+    updatedBy: string
+  ): Promise<PricingPlan> {
+    const row = await this.ensureDefaultSeeded(tier);
+    const body: PricingPlanDto = {
+      displayName: row.displayName,
+      description: row.description ?? undefined,
+      badge: row.badge ?? undefined,
+      features: (row.features as string[]) ?? [],
+      monthPrice: row.monthPrice,
+      yearPrice: row.yearPrice,
+      channel: row.channel,
+      postsPerMonth: row.postsPerMonth,
+      teamMembers: row.teamMembers,
+      communityFeatures: row.communityFeatures,
+      featuredByGitroom: row.featuredByGitroom,
+      ai: row.ai,
+      importFromChannels: row.importFromChannels,
+      imageGenerator: row.imageGenerator,
+      imageGenerationCount: row.imageGenerationCount,
+      generateVideos: row.generateVideos,
+      youtubeTextSuggestions: row.youtubeTextSuggestions,
+      publicApi: row.publicApi,
+      webhooks: row.webhooks,
+      autoPost: row.autoPost,
+      razorpayPlanIdMonthly:
+        period === 'MONTHLY' ? planId : row.razorpayPlanIdMonthly ?? undefined,
+      razorpayPlanIdYearly:
+        period === 'YEARLY' ? planId : row.razorpayPlanIdYearly ?? undefined,
+      isActive: row.isActive,
+      isPurchasable: row.isPurchasable,
+      sortOrder: row.sortOrder,
+    };
+    return this._pricingPlansRepository.upsert(tier, body, updatedBy);
+  }
 }

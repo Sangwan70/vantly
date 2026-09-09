@@ -18,12 +18,14 @@ interface AdminNavItem {
 // shape of the Admin area up front instead of appearing piecemeal.
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: '/admin/dashboard', label: 'Dashboard' },
+  { href: '/admin/users', label: 'Users' },
   { href: '/admin/errors', label: 'Errors' },
   { href: '/admin/stats', label: 'Stats' },
   { href: '/admin/payment-gateway', label: 'Payment Gateway' },
   { href: '/admin/pricing-plans', label: 'Plans & Pricing' },
   { href: '/admin/mailer', label: 'Mailer' },
   { href: '/admin/content', label: 'Content' },
+  { href: '/admin/tools', label: 'Tools' },
 ];
 
 const AdminNavLink: FC<{ item: AdminNavItem; active: boolean }> = ({
