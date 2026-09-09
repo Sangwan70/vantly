@@ -5,8 +5,9 @@ import { Organization } from '@prisma/client';
 import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
 import { BillingSubscribeDto } from '@gitroom/nestjs-libraries/dtos/billing/billing.subscribe.dto';
-import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { PricingPlansService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing-plans.service';
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
+import { PaymentGatewaySettingsService } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.service';
 
 /**
  * RazorPay payment gateway integration - the INR-billing counterpart to
@@ -33,17 +34,6 @@ import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
  *    BillingController surfaces it so the user is told to start a new
  *    subscription instead.
  */
-
-let razorpayClient: Razorpay | null = null;
-function getClient(): Razorpay {
-  if (!razorpayClient) {
-    razorpayClient = new Razorpay({
-      key_id: process.env.RAZORPAY_API_KEY || '',
-      key_secret: process.env.RAZORPAY_API_SECRET || '',
-    });
-  }
-  return razorpayClient;
-}
 
 // How many billing cycles a RazorPay Subscription auto-charges before
 // stopping on its own - the API has no "forever" option. A long-but-bounded
@@ -79,32 +69,66 @@ export class RazorpayReactivationUnsupportedError extends Error {
 export class RazorpayService {
   private readonly _logger = new Logger(RazorpayService.name);
 
+  // Lazily-built client, rebuilt only when the resolved key id changes -
+  // avoids reconstructing the SDK client on every single call while still
+  // picking up an admin credential change (Settings -> Payment Gateway)
+  // without a restart.
+  private _client: Razorpay | null = null;
+  private _clientKeyId: string | null = null;
+
   constructor(
     private readonly _subscriptionService: SubscriptionService,
-    private readonly _organizationService: OrganizationService
+    private readonly _organizationService: OrganizationService,
+    private readonly _paymentGatewaySettingsService: PaymentGatewaySettingsService,
+    private readonly _pricingPlansService: PricingPlansService
   ) {}
 
-  isAvailable(): boolean {
-    return !!(process.env.RAZORPAY_API_KEY && process.env.RAZORPAY_API_SECRET);
+  /** DB-first, env-fallback credential resolution - see
+   * PaymentGatewaySettingsService.resolveRazorpayCredentials. */
+  private resolveCredentials() {
+    return this._paymentGatewaySettingsService.resolveRazorpayCredentials();
+  }
+
+  private async getClient(): Promise<Razorpay> {
+    const creds = await this.resolveCredentials();
+    const keyId = creds.keyId || '';
+    if (!this._client || this._clientKeyId !== keyId) {
+      this._client = new Razorpay({
+        key_id: keyId,
+        key_secret: creds.keySecret || '',
+      });
+      this._clientKeyId = keyId;
+    }
+    return this._client;
+  }
+
+  async isAvailable(): Promise<boolean> {
+    const creds = await this.resolveCredentials();
+    return !!(creds.keyId && creds.keySecret);
   }
 
   /** RazorPay's public Key ID - safe to expose client-side, required by
    * Checkout.js to open the payment modal. */
-  getKeyId(): string {
-    return process.env.RAZORPAY_API_KEY || '';
+  async getKeyId(): Promise<string> {
+    const creds = await this.resolveCredentials();
+    return creds.keyId || '';
   }
 
   /**
-   * Resolves the pre-created RazorPay Plan ID for a tier + billing cycle
-   * from environment variables, e.g. RAZORPAY_STANDARD_PLAN_MONTHLY. Plans
-   * must be created ahead of time in the RazorPay Dashboard (Subscriptions
-   * -> Plans) with the real INR amount baked in - RazorPay has no API for
-   * "create a checkout for $X", only "create a subscription against this
-   * pre-existing Plan".
+   * Resolves the pre-created RazorPay Plan ID for a tier + billing cycle -
+   * DB-first (Admin Panel -> Plans & Pricing -> RazorPay Plan ID fields),
+   * falling back to the matching environment variable (e.g.
+   * RAZORPAY_STANDARD_PLAN_MONTHLY) when unset - see
+   * PricingPlansService.resolveRazorpayPlanId. Plans must be created ahead
+   * of time in the RazorPay Dashboard (Subscriptions -> Plans) with the
+   * real INR amount baked in - RazorPay has no API for "create a checkout
+   * for $X", only "create a subscription against this pre-existing Plan".
    */
-  getPlanId(tier: RazorpayTier, period: 'MONTHLY' | 'YEARLY'): string | undefined {
-    const key = `RAZORPAY_${tier}_PLAN_${period}`;
-    return process.env[key] || undefined;
+  async getPlanId(
+    tier: RazorpayTier,
+    period: 'MONTHLY' | 'YEARLY'
+  ): Promise<string | undefined> {
+    return this._pricingPlansService.resolveRazorpayPlanId(tier, period);
   }
 
   /**
@@ -145,12 +169,12 @@ export class RazorpayService {
     razorpay_subscription_id: string;
     razorpay_key_id: string;
   }> {
-    if (!this.isAvailable()) {
+    if (!(await this.isAvailable())) {
       throw new Error('RazorPay is not configured (missing API key/secret)');
     }
 
     const tier = body.billing as RazorpayTier;
-    const planId = this.getPlanId(tier, body.period);
+    const planId = await this.getPlanId(tier, body.period);
     if (!planId) {
       throw new Error(
         `No RazorPay Plan ID configured for tier ${tier} (${body.period}) - ` +
@@ -173,7 +197,8 @@ export class RazorpayService {
       service: 'vantly',
     };
 
-    const subscription = await getClient().subscriptions.create({
+    const client = await this.getClient();
+    const subscription = await client.subscriptions.create({
       plan_id: planId,
       total_count: TOTAL_COUNT_BY_PERIOD[body.period],
       quantity: 1,
@@ -196,7 +221,7 @@ export class RazorpayService {
     return {
       url: subscription.short_url,
       razorpay_subscription_id: subscription.id,
-      razorpay_key_id: this.getKeyId(),
+      razorpay_key_id: await this.getKeyId(),
     };
   }
 
@@ -227,7 +252,8 @@ export class RazorpayService {
     const id = makeId(10);
 
     try {
-      const result = await getClient().subscriptions.cancel(subscriptionId, true);
+      const client = await this.getClient();
+      const result = await client.subscriptions.cancel(subscriptionId, true);
       await this._organizationService.updateRazorpaySubscription(
         organizationId,
         subscriptionId,
@@ -331,6 +357,7 @@ export class RazorpayService {
     const period = (notes.period as 'MONTHLY' | 'YEARLY') || 'MONTHLY';
     const uniqueId = notes.uniqueId || makeId(10);
 
+    const pricing = await this._pricingPlansService.getPricingMap();
     if (!tier || !pricing[tier]) {
       this._logger.warn(
         `RazorPay subscription ${subId} activated/charged but notes.tier (${tier}) is missing or unknown - not updating subscription tier`

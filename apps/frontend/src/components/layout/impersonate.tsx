@@ -4,7 +4,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { useFetch } from '@gitroom/helpers/utils/custom.fetch';
 import { useUser } from '@gitroom/frontend/components/layout/user.context';
 import { Select } from '@gitroom/react/form/select';
-import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { usePricingPlans } from '@gitroom/frontend/lib/billing/use-pricing-plans';
 import { deleteDialog } from '@gitroom/react/helpers/delete.dialog';
 import { useVariables } from '@gitroom/react/helpers/variable.context';
 import { setCookie } from '@gitroom/frontend/components/layout/layout.context';
@@ -563,6 +563,7 @@ const ManageBilling = () => {
 export const Subscription = () => {
   const fetch = useFetch();
   const t = useT();
+  const { data: pricing } = usePricingPlans();
 
   const addSubscription: ChangeEventHandler<HTMLSelectElement> = useCallback(
     async (e) => {
@@ -611,6 +612,7 @@ const AdjustSubscriptionModal: FC<{ close: () => void }> = ({ close }) => {
   const t = useT();
   const toaster = useToaster();
   const currentUser = useUser();
+  const { data: pricing } = usePricingPlans();
   const [tier, setTier] = useState(currentUser?.tier?.current || 'FREE');
   const [period, setPeriod] = useState('MONTHLY');
   const [totalChannels, setTotalChannels] = useState(
@@ -981,32 +983,17 @@ const AddTeamMember = () => {
   );
 };
 
-const ViewErrors = () => {
+const ViewAdminDashboard = () => {
   const t = useT();
   const handleClick = useCallback(() => {
-    window.location.href = '/admin/errors';
+    window.location.href = '/admin/dashboard';
   }, []);
   return (
     <div
       className="px-[10px] rounded-[4px] bg-blue-700 text-white cursor-pointer whitespace-nowrap"
       onClick={handleClick}
     >
-      {t('view_errors', 'View Errors')}
-    </div>
-  );
-};
-
-const ViewStats = () => {
-  const t = useT();
-  const handleClick = useCallback(() => {
-    window.location.href = '/admin/stats';
-  }, []);
-  return (
-    <div
-      className="px-[10px] rounded-[4px] bg-purple-700 text-white cursor-pointer whitespace-nowrap"
-      onClick={handleClick}
-    >
-      {t('view_stats', 'View Stats')}
+      {t('admin_dashboard', 'Admin Dashboard')}
     </div>
   );
 };
@@ -1473,8 +1460,7 @@ export const Impersonate = () => {
                 <BanUser />
                 <ImportDebugPost />
                 <AddAnnouncement />
-                <ViewErrors />
-                <ViewStats />
+                <ViewAdminDashboard />
               </div>
             )}
           </div>

@@ -19,6 +19,9 @@ export const MarketingHeader = () => {
           <Link href="/pricing" className="hover:text-textColor transition-colors">
             Pricing
           </Link>
+          <Link href="/blog" className="hover:text-textColor transition-colors">
+            Blog
+          </Link>
           <Link href="/#faq" className="hover:text-textColor transition-colors">
             FAQ
           </Link>

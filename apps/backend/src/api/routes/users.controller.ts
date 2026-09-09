@@ -20,7 +20,7 @@ import { AuthService as AuthChecker } from '@gitroom/helpers/auth/auth.service';
 import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
 import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
 import { getCookieUrlFromDomain } from '@gitroom/helpers/subdomain/subdomain.management';
-import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { PricingPlansService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing-plans.service';
 import { ApiTags } from '@nestjs/swagger';
 import { UsersService } from '@gitroom/nestjs-libraries/database/prisma/users/users.service';
 import { UserDetailDto } from '@gitroom/nestjs-libraries/dtos/users/user.details.dto';
@@ -45,7 +45,8 @@ export class UsersController {
     private _authService: AuthService,
     private _orgService: OrganizationService,
     private _userService: UsersService,
-    private _trackService: TrackService
+    private _trackService: TrackService,
+    private _pricingPlansService: PricingPlansService
   ) {}
 
   @Get('/chatbase-token')
@@ -108,6 +109,7 @@ export class UsersController {
     }
 
     const impersonate = req.cookies.impersonate || req.headers.impersonate;
+    const pricing = await this._pricingPlansService.getPricingMap();
     // @ts-ignore
     return {
       ...user,

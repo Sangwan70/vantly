@@ -4,7 +4,7 @@ import { OrganizationRepository } from '@gitroom/nestjs-libraries/database/prism
 import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/notifications/notification.service';
 import { AddTeamMemberDto } from '@gitroom/nestjs-libraries/dtos/settings/add.team.member.dto';
 import { AdminAddTeamMemberDto } from '@gitroom/nestjs-libraries/dtos/settings/admin.add.team.member.dto';
-import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { PricingPlansService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing-plans.service';
 import { AuthService } from '@gitroom/helpers/auth/auth.service';
 import dayjs from 'dayjs';
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
@@ -15,7 +15,8 @@ import { AutopostService } from '@gitroom/nestjs-libraries/database/prisma/autop
 export class OrganizationService {
   constructor(
     private _organizationRepository: OrganizationRepository,
-    private _notificationsService: NotificationService
+    private _notificationsService: NotificationService,
+    private _pricingPlansService: PricingPlansService
   ) {}
   async createOrgAndUser(
     body: Omit<CreateOrgUserDto, 'providerToken'> & { providerId?: string },
@@ -134,6 +135,7 @@ export class OrganizationService {
       org?.subscription?.subscriptionTier ||
       (!process.env.STRIPE_PUBLISHABLE_KEY ? 'ULTIMATE' : 'FREE');
 
+    const pricing = await this._pricingPlansService.getPricingMap();
     if (!pricing[tier].team_members) {
       throw new HttpException(
         'The organization plan does not include team members',

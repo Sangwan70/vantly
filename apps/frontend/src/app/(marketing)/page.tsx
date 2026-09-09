@@ -4,9 +4,24 @@ import { MarketingHeader } from '@gitroom/frontend/components/marketing/marketin
 import { MarketingFooter } from '@gitroom/frontend/components/marketing/marketing-footer.component';
 import { FaqAccordion } from '@gitroom/frontend/components/marketing/faq-accordion.component';
 import { MARKETING_PLATFORMS } from '@gitroom/frontend/components/marketing/platform-icons';
-import { MARKETING_TIERS } from '@gitroom/frontend/components/marketing/pricing-tiers';
+import { PricingTeaser } from '@gitroom/frontend/components/marketing/pricing-teaser.component';
+import { getStaticPageOverride } from '@gitroom/frontend/components/legal/get-static-page';
+import { getMarketingPricingPlans } from '@gitroom/frontend/lib/billing/get-pricing-plans-marketing';
 
-export const dynamic = 'force-static';
+// Was force-static (built once, served instantly, no DB lookup per
+// visit). Switched to force-dynamic so an admin edit in Content
+// Management (Settings -> Content -> Home) shows up immediately, matching
+// vantly-ugc.com's Content Management page - the real trade-off is a
+// backend round-trip on every home-page view instead of pre-built static
+// HTML. get-static-page.ts's cache:'no-store' fetch is what actually
+// needs this; force-static would have kept serving a stale build-time
+// snapshot regardless of what's saved in the database.
+export const dynamic = 'force-dynamic';
+
+const DEFAULT_HOME_SUBTITLE =
+  'Vantly is the social media scheduling platform with a built-in AI Optimizer \u2014 plan and publish everywhere, then let Vantly surface the title rewrites, thumbnail fixes, and SEO tags that actually move the needle.';
+const DEFAULT_HOME_CTA_PRIMARY = 'Get started free';
+const DEFAULT_HOME_CTA_SECONDARY = 'See pricing';
 
 const FEATURES = [
   {
@@ -75,41 +90,77 @@ const HOME_FAQ = [
   },
 ];
 
-export default function MarketingHomePage() {
+export default async function MarketingHomePage() {
+  const override = await getStaticPageOverride('home');
+  const plans = await getMarketingPricingPlans();
   return (
     <div className="min-h-screen w-full flex flex-col">
       <MarketingHeader />
 
       <main className="flex-1">
-        {/* Hero */}
-        <section className="max-w-[1200px] mx-auto px-[20px] pt-[88px] pb-[72px] flex flex-col items-center text-center">
+        {/* Hero - overridable from Admin Panel -> Content -> Home (see
+            get-static-page.ts's doc comment: every field below applies
+            independently, so setting only a hero image leaves the
+            headline/subtitle/CTAs untouched). */}
+        <section className="relative max-w-[1200px] mx-auto px-[20px] pt-[88px] pb-[72px] flex flex-col items-center text-center overflow-hidden rounded-[24px]">
+          {(override?.heroImageUrl || override?.heroVideoUrl) && (
+            <div className="absolute inset-0 -z-10">
+              {override.heroVideoUrl ? (
+                <video
+                  src={override.heroVideoUrl}
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                />
+              ) : (
+                <Image
+                  src={override.heroImageUrl!}
+                  alt=""
+                  fill
+                  priority
+                  className="object-cover"
+                />
+              )}
+              <div
+                className="absolute inset-0 bg-black"
+                style={{
+                  opacity: (override.heroOverlayOpacity ?? 45) / 100,
+                }}
+              />
+            </div>
+          )}
           <div className="inline-flex items-center gap-[8px] border border-fifth rounded-full px-[14px] py-[6px] text-[12px] font-[500] text-textColor/70 mb-[24px]">
             <span className="w-[6px] h-[6px] rounded-full bg-ai" />
             Now with an AI Optimizer Feed for YouTube
           </div>
-          <h1 className="text-[38px] md:text-[56px] font-[700] leading-[1.1] -tracking-[1px] text-textColor max-w-[820px]">
-            Schedule every channel.
-            <br />
-            Let AI find what to fix.
-          </h1>
+          {override?.title ? (
+            <h1 className="text-[38px] md:text-[56px] font-[700] leading-[1.1] -tracking-[1px] text-textColor max-w-[820px]">
+              {override.title}
+            </h1>
+          ) : (
+            <h1 className="text-[38px] md:text-[56px] font-[700] leading-[1.1] -tracking-[1px] text-textColor max-w-[820px]">
+              Schedule every channel.
+              <br />
+              Let AI find what to fix.
+            </h1>
+          )}
           <p className="mt-[24px] text-[16px] md:text-[18px] leading-[1.6] text-textColor/70 max-w-[640px]">
-            Vantly is the social media scheduling platform with a built-in AI
-            Optimizer &mdash; plan and publish everywhere, then let Vantly
-            surface the title rewrites, thumbnail fixes, and SEO tags that
-            actually move the needle.
+            {override?.contentHtml || DEFAULT_HOME_SUBTITLE}
           </p>
           <div className="mt-[36px] flex flex-col sm:flex-row items-center gap-[14px]">
             <Link
               href="/auth"
               className="text-[15px] font-[600] bg-btnPrimary text-white rounded-[10px] px-[24px] py-[13px] hover:opacity-90 transition-opacity"
             >
-              Get started free
+              {override?.ctaPrimaryText || DEFAULT_HOME_CTA_PRIMARY}
             </Link>
             <Link
               href="/pricing"
               className="text-[15px] font-[600] text-textColor border border-fifth rounded-[10px] px-[24px] py-[13px] hover:bg-newBgColorInner transition-colors"
             >
-              See pricing
+              {override?.ctaSecondaryText || DEFAULT_HOME_CTA_SECONDARY}
             </Link>
           </div>
           <p className="mt-[16px] text-[13px] text-gray">
@@ -209,28 +260,7 @@ export default function MarketingHomePage() {
               Start free. Upgrade when you are ready to connect more channels.
             </p>
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-[16px]">
-            {MARKETING_TIERS.map((tier) => (
-              <Link
-                key={tier.key}
-                href="/pricing"
-                className="rounded-[14px] border border-fifth bg-newBgColorInner p-[20px] hover:border-btnPrimary transition-colors"
-              >
-                <p className="text-[14px] font-[600] text-textColor">
-                  {tier.name}
-                </p>
-                <p className="mt-[8px] text-[26px] font-[700] text-textColor -tracking-[0.5px]">
-                  ${tier.monthPrice}
-                  <span className="text-[13px] font-[500] text-gray">
-                    /mo
-                  </span>
-                </p>
-                <p className="mt-[4px] text-[12px] text-gray">
-                  {tier.channels} channels
-                </p>
-              </Link>
-            ))}
-          </div>
+          <PricingTeaser plans={plans} />
           <div className="mt-[32px] flex justify-center">
             <Link
               href="/pricing"

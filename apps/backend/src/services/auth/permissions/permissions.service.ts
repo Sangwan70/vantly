@@ -1,7 +1,7 @@
 import { Ability, AbilityBuilder, AbilityClass } from '@casl/ability';
 import { Injectable } from '@nestjs/common';
-import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
 import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
+import { PricingPlansService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing-plans.service';
 import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
 import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
 import dayjs from 'dayjs';
@@ -16,7 +16,8 @@ export class PermissionsService {
     private _subscriptionService: SubscriptionService,
     private _postsService: PostsService,
     private _integrationService: IntegrationService,
-    private _webhooksService: WebhooksService
+    private _webhooksService: WebhooksService,
+    private _pricingPlansService: PricingPlansService
   ) {}
   async getPackageOptions(orgId: string) {
     const subscription =
@@ -26,6 +27,7 @@ export class PermissionsService {
       subscription?.subscriptionTier ||
       (!process.env.STRIPE_PUBLISHABLE_KEY ? 'PRO' : 'FREE');
 
+    const pricing = await this._pricingPlansService.getPricingMap();
     const { channel, ...all } = pricing[tier];
     return {
       subscription,

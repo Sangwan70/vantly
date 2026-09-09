@@ -6,24 +6,51 @@ import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/o
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
 import { BillingSubscribeDto } from '@gitroom/nestjs-libraries/dtos/billing/billing.subscribe.dto';
 import { groupBy } from 'lodash';
-import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { PricingPlansService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing-plans.service';
 import { AuthService } from '@gitroom/helpers/auth/auth.service';
 import { TrackService } from '@gitroom/nestjs-libraries/track/track.service';
 import { UsersService } from '@gitroom/nestjs-libraries/database/prisma/users/users.service';
 import { TrackEnum } from '@gitroom/nestjs-libraries/user/track.enum';
+import { PaymentGatewaySettingsService } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.service';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_nothing');
+// Used only for validateRequest()'s webhook-signature verification below,
+// which never calls the Stripe API and doesn't depend on the secret key -
+// every other method resolves its own client via getClient() instead, so
+// an admin-configured DB key (Settings -> Payment Gateway) takes effect
+// immediately, without a redeploy or restart.
+const webhookVerifier = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_nothing');
 
 @Injectable()
 export class StripeService {
+  // Lazily-built client, rebuilt only when the resolved secret key changes
+  // - avoids reconstructing the SDK client on every call while still
+  // picking up an admin credential change without a restart.
+  private _stripeClient: Stripe | null = null;
+  private _stripeClientKey: string | null = null;
+
   constructor(
     private _subscriptionService: SubscriptionService,
     private _organizationService: OrganizationService,
     private _userService: UsersService,
-    private _trackService: TrackService
+    private _trackService: TrackService,
+    private _paymentGatewaySettingsService: PaymentGatewaySettingsService,
+    private _pricingPlansService: PricingPlansService
   ) {}
+
+  /** DB-first, env-fallback Stripe client - see
+   * PaymentGatewaySettingsService.resolveStripeCredentials. */
+  private async getClient(): Promise<Stripe> {
+    const creds = await this._paymentGatewaySettingsService.resolveStripeCredentials();
+    const key = creds.secretKey || 'sk_nothing';
+    if (!this._stripeClient || this._stripeClientKey !== key) {
+      this._stripeClient = new Stripe(key);
+      this._stripeClientKey = key;
+    }
+    return this._stripeClient;
+  }
+
   validateRequest(rawBody: Buffer, signature: string, endpointSecret: string) {
-    return stripe.webhooks.constructEvent(rawBody, signature, endpointSecret);
+    return webhookVerifier.webhooks.constructEvent(rawBody, signature, endpointSecret);
   }
 
   async checkValidCard(
@@ -46,7 +73,7 @@ export class StripeService {
 
     console.log('Checking card');
 
-    const paymentMethods = await stripe.paymentMethods.list({
+    const paymentMethods = await (await this.getClient()).paymentMethods.list({
       customer: event.data.object.customer as string,
     });
 
@@ -66,7 +93,7 @@ export class StripeService {
     }
 
     try {
-      const paymentIntent = await stripe.paymentIntents.create({
+      const paymentIntent = await (await this.getClient()).paymentIntents.create({
         amount: 100,
         currency: 'usd',
         payment_method: latestMethod.id,
@@ -78,17 +105,17 @@ export class StripeService {
 
       if (paymentIntent.status !== 'requires_capture') {
         console.error('Cant charge');
-        await stripe.paymentMethods.detach(paymentMethods.data[0].id);
-        await stripe.subscriptions.cancel(event.data.object.id as string);
+        await (await this.getClient()).paymentMethods.detach(paymentMethods.data[0].id);
+        await (await this.getClient()).subscriptions.cancel(event.data.object.id as string);
         return false;
       }
 
-      await stripe.paymentIntents.cancel(paymentIntent.id as string);
+      await (await this.getClient()).paymentIntents.cancel(paymentIntent.id as string);
       return true;
     } catch (err) {
       try {
-        await stripe.paymentMethods.detach(paymentMethods.data[0].id);
-        await stripe.subscriptions.cancel(event.data.object.id as string);
+        await (await this.getClient()).paymentMethods.detach(paymentMethods.data[0].id);
+        await (await this.getClient()).subscriptions.cancel(event.data.object.id as string);
       } catch (err) {
         /*dont do anything*/
       }
@@ -116,6 +143,7 @@ export class StripeService {
       return { ok: false };
     }
 
+    const pricing = await this._pricingPlansService.getPricingMap();
     return this._subscriptionService.createOrUpdateSubscription(
       event.data.object.status !== 'active',
       uniqueId,
@@ -142,6 +170,7 @@ export class StripeService {
       return { ok: false };
     }
 
+    const pricing = await this._pricingPlansService.getPricingMap();
     return this._subscriptionService.createOrUpdateSubscription(
       event.data.object.status !== 'active',
       uniqueId,
@@ -184,9 +213,10 @@ export class StripeService {
         }
       }
     }
+    const client = await this.getClient();
     await Promise.all(
       [...emailByCustomer].map(([customerId, email]) =>
-        stripe.customers
+        client.customers
           .update(customerId, {
             email: email.indexOf('@') > -1 ? email : `${email}@vantly.social`,
           })
@@ -201,7 +231,7 @@ export class StripeService {
     }
 
     const users = await this._organizationService.getTeam(organization.id);
-    const customer = await stripe.customers.create({
+    const customer = await (await this.getClient()).customers.create({
       email: users.users[0].user.email.indexOf('@') > -1 ? users.users[0].user.email : `${users.users[0].user.email}@vantly.social`,
       name: organization.name,
     });
@@ -213,7 +243,7 @@ export class StripeService {
   }
 
   async getPackages() {
-    const products = await stripe.prices.list({
+    const products = await (await this.getClient()).prices.list({
       active: true,
       expand: ['data.tiers', 'data.product'],
       lookup_keys: [
@@ -239,8 +269,9 @@ export class StripeService {
   async prorate(organizationId: string, body: BillingSubscribeDto) {
     const org = await this._organizationService.getOrgById(organizationId);
     const customer = await this.createOrGetCustomer(org!);
+    const pricing = await this._pricingPlansService.getPricingMap();
     const priceData = pricing[body.billing];
-    const allProducts = await stripe.products.list({
+    const allProducts = await (await this.getClient()).products.list({
       active: true,
       expand: ['data.prices'],
     });
@@ -249,12 +280,12 @@ export class StripeService {
       allProducts.data.find(
         (product) => product.name.toUpperCase() === body.billing.toUpperCase()
       ) ||
-      (await stripe.products.create({
+      (await (await this.getClient()).products.create({
         active: true,
         name: body.billing,
       }));
 
-    const pricesList = await stripe.prices.list({
+    const pricesList = await (await this.getClient()).prices.list({
       active: true,
       product: findProduct!.id,
     });
@@ -271,7 +302,7 @@ export class StripeService {
               : priceData.year_price) *
               100
       ) ||
-      (await stripe.prices.create({
+      (await (await this.getClient()).prices.create({
         active: true,
         product: findProduct!.id,
         currency: 'usd',
@@ -289,7 +320,7 @@ export class StripeService {
 
     const currentUserSubscription = {
       data: (
-        await stripe.subscriptions.list({
+        await (await this.getClient()).subscriptions.list({
           customer,
           status: 'all',
         })
@@ -297,7 +328,7 @@ export class StripeService {
     };
 
     try {
-      const price = await stripe.invoices.createPreview({
+      const price = await (await this.getClient()).invoices.createPreview({
         customer,
         subscription: currentUserSubscription?.data?.[0]?.id,
         subscription_details: {
@@ -325,7 +356,7 @@ export class StripeService {
   async getCustomerSubscriptions(organizationId: string) {
     const org = (await this._organizationService.getOrgById(organizationId))!;
     const customer = org.paymentId;
-    return stripe.subscriptions.list({
+    return (await this.getClient()).subscriptions.list({
       customer: customer!,
       status: 'all',
     });
@@ -337,7 +368,7 @@ export class StripeService {
     const customer = await this.createOrGetCustomer(org!);
     const currentUserSubscription = {
       data: (
-        await stripe.subscriptions.list({
+        await (await this.getClient()).subscriptions.list({
           customer,
           status: 'all',
           expand: ['data.latest_invoice'],
@@ -349,7 +380,7 @@ export class StripeService {
 
     // If the user is toggling back (un-cancelling), just remove the cancel
     if (sub.cancel_at_period_end) {
-      const { cancel_at } = await stripe.subscriptions.update(sub.id, {
+      const { cancel_at } = await (await this.getClient()).subscriptions.update(sub.id, {
         cancel_at_period_end: false,
         metadata: { service: 'gitroom', id },
       });
@@ -369,7 +400,7 @@ export class StripeService {
 
     if (hasFailedPayment) {
       // Payment already failed — cancel immediately and delete subscription
-      await stripe.subscriptions.cancel(sub.id);
+      await (await this.getClient()).subscriptions.cancel(sub.id);
       await this._subscriptionService.deleteSubscription(customer);
 
       return {
@@ -379,7 +410,7 @@ export class StripeService {
     }
 
     // Payment succeeded — cancel at end of billing period
-    const { cancel_at } = await stripe.subscriptions.update(sub.id, {
+    const { cancel_at } = await (await this.getClient()).subscriptions.update(sub.id, {
       cancel_at_period_end: true,
       metadata: { service: 'gitroom', id },
     });
@@ -396,7 +427,7 @@ export class StripeService {
   }
 
   async createBillingPortalLink(customer: string) {
-    return stripe.billingPortal.sessions.create({
+    return (await this.getClient()).billingPortal.sessions.create({
       customer,
       return_url: process.env['FRONTEND_URL'] + '/billing',
     });
@@ -409,7 +440,7 @@ export class StripeService {
    */
   private async findAutoApplyPromotionCode(): Promise<string | null> {
     try {
-      const promotionCodes = await stripe.promotionCodes.list({
+      const promotionCodes = await (await this.getClient()).promotionCodes.list({
         active: true,
         limit: 100,
       });
@@ -466,7 +497,7 @@ export class StripeService {
     const user = await this._userService.getUserById(userId);
 
     try {
-      await stripe.customers.update(customer, {
+      await (await this.getClient()).customers.update(customer, {
         email: user.email.indexOf('@') > -1 ? user.email : `${user.email}@vantly.social`,
         ...(body.dub
           ? {
@@ -486,7 +517,7 @@ export class StripeService {
     }
 
     const isUtm = body.utm ? `&utm_source=${body.utm}` : '';
-    const { client_secret } = await stripe.checkout.sessions.create({
+    const { client_secret } = await (await this.getClient()).checkout.sessions.create({
       ui_mode: 'custom',
       customer,
       return_url:
@@ -539,7 +570,7 @@ export class StripeService {
     const isUtm = body.utm ? `&utm_source=${body.utm}` : '';
 
     if (body.dub) {
-      await stripe.customers.update(customer, {
+      await (await this.getClient()).customers.update(customer, {
         metadata: {
           dubCustomerExternalId: userId,
           dubClickId: body.dub,
@@ -547,7 +578,7 @@ export class StripeService {
       });
     }
 
-    const { url } = await stripe.checkout.sessions.create({
+    const { url } = await (await this.getClient()).checkout.sessions.create({
       customer,
       cancel_url: process.env['FRONTEND_URL'] + `/billing?cancel=true${isUtm}`,
       success_url:
@@ -578,12 +609,12 @@ export class StripeService {
 
   async finishTrial(paymentId: string) {
     const list = (
-      await stripe.subscriptions.list({
+      await (await this.getClient()).subscriptions.list({
         customer: paymentId,
       })
     ).data.filter((f) => f.status === 'trialing');
 
-    return stripe.subscriptions.update(list[0].id, {
+    return (await this.getClient()).subscriptions.update(list[0].id, {
       trial_end: 'now',
     });
   }
@@ -593,7 +624,7 @@ export class StripeService {
       return false;
     }
 
-    const list = await stripe.charges.list({
+    const list = await (await this.getClient()).charges.list({
       customer,
       limit: 1,
     });
@@ -604,7 +635,7 @@ export class StripeService {
 
     const currentUserSubscription = {
       data: (
-        await stripe.subscriptions.list({
+        await (await this.getClient()).subscriptions.list({
           customer,
           status: 'all',
           expand: ['data.discounts'],
@@ -635,7 +666,7 @@ export class StripeService {
 
     const currentUserSubscription = {
       data: (
-        await stripe.subscriptions.list({
+        await (await this.getClient()).subscriptions.list({
           customer,
           status: 'all',
           expand: ['data.discounts'],
@@ -643,7 +674,7 @@ export class StripeService {
       ).data.find((f) => f.status === 'active' || f.status === 'trialing'),
     };
 
-    await stripe.subscriptions.update(currentUserSubscription.data.id, {
+    await (await this.getClient()).subscriptions.update(currentUserSubscription.data.id, {
       discounts: [
         {
           coupon: process.env.STRIPE_DISCOUNT_ID!,
@@ -690,10 +721,11 @@ export class StripeService {
     allowTrial: boolean
   ) {
     const id = makeId(10);
+    const pricing = await this._pricingPlansService.getPricingMap();
     const priceData = pricing[body.billing];
     const org = await this._organizationService.getOrgById(organizationId);
     const customer = await this.createOrGetCustomer(org!);
-    const allProducts = await stripe.products.list({
+    const allProducts = await (await this.getClient()).products.list({
       active: true,
       expand: ['data.prices'],
     });
@@ -702,12 +734,12 @@ export class StripeService {
       allProducts.data.find(
         (product) => product.name.toUpperCase() === body.billing.toUpperCase()
       ) ||
-      (await stripe.products.create({
+      (await (await this.getClient()).products.create({
         active: true,
         name: body.billing,
       }));
 
-    const pricesList = await stripe.prices.list({
+    const pricesList = await (await this.getClient()).prices.list({
       active: true,
       product: findProduct!.id,
     });
@@ -723,7 +755,7 @@ export class StripeService {
               : priceData.year_price) *
               100
       ) ||
-      (await stripe.prices.create({
+      (await (await this.getClient()).prices.create({
         active: true,
         product: findProduct!.id,
         currency: 'usd',
@@ -756,10 +788,11 @@ export class StripeService {
     allowTrial: boolean
   ) {
     const id = makeId(10);
+    const pricing = await this._pricingPlansService.getPricingMap();
     const priceData = pricing[body.billing];
     const org = await this._organizationService.getOrgById(organizationId);
     const customer = await this.createOrGetCustomer(org!);
-    const allProducts = await stripe.products.list({
+    const allProducts = await (await this.getClient()).products.list({
       active: true,
       expand: ['data.prices'],
     });
@@ -768,12 +801,12 @@ export class StripeService {
       allProducts.data.find(
         (product) => product.name.toUpperCase() === body.billing.toUpperCase()
       ) ||
-      (await stripe.products.create({
+      (await (await this.getClient()).products.create({
         active: true,
         name: body.billing,
       }));
 
-    const pricesList = await stripe.prices.list({
+    const pricesList = await (await this.getClient()).prices.list({
       active: true,
       product: findProduct!.id,
     });
@@ -789,7 +822,7 @@ export class StripeService {
               : priceData.year_price) *
               100
       ) ||
-      (await stripe.prices.create({
+      (await (await this.getClient()).prices.create({
         active: true,
         product: findProduct!.id,
         currency: 'usd',
@@ -820,7 +853,7 @@ export class StripeService {
 
     const currentUserSubscription = {
       data: (
-        await stripe.subscriptions.list({
+        await (await this.getClient()).subscriptions.list({
           customer,
           status: 'all',
         })
@@ -828,7 +861,7 @@ export class StripeService {
     };
 
     try {
-      await stripe.subscriptions.update(currentUserSubscription.data[0].id, {
+      await (await this.getClient()).subscriptions.update(currentUserSubscription.data[0].id, {
         cancel_at_period_end: false,
         metadata: {
           service: 'gitroom',
@@ -863,7 +896,7 @@ export class StripeService {
     if (!subscriptionId) {
       return { ok: true };
     }
-    const subscription = await stripe.subscriptions.retrieve(
+    const subscription = await (await this.getClient()).subscriptions.retrieve(
       typeof subscriptionId === 'string' ? subscriptionId : subscriptionId.id
     );
 
@@ -884,7 +917,7 @@ export class StripeService {
       return [];
     }
 
-    const charges = await stripe.charges.list({
+    const charges = await (await this.getClient()).charges.list({
       customer: org.paymentId,
       limit: 100,
     });
@@ -911,7 +944,7 @@ export class StripeService {
     const invoicePdfMap: Record<string, string> = {};
     for (const invoiceId of invoiceIds) {
       try {
-        const inv = await stripe.invoices.retrieve(invoiceId);
+        const inv = await (await this.getClient()).invoices.retrieve(invoiceId);
         if (inv.invoice_pdf) {
           invoicePdfMap[invoiceId] = inv.invoice_pdf;
         }
@@ -940,7 +973,7 @@ export class StripeService {
 
     for (const chargeId of chargeIds) {
       try {
-        await stripe.refunds.create({ charge: chargeId });
+        await (await this.getClient()).refunds.create({ charge: chargeId });
         refunded.push(chargeId);
       } catch (err) {
         failed.push(chargeId);
@@ -959,7 +992,7 @@ export class StripeService {
     const customer = org.paymentId;
 
     const subscriptions = (
-      await stripe.subscriptions.list({
+      await (await this.getClient()).subscriptions.list({
         customer,
         status: 'all',
       })
@@ -969,7 +1002,7 @@ export class StripeService {
       throw new Error('No active subscription found');
     }
 
-    await stripe.subscriptions.cancel(subscriptions[0].id);
+    await (await this.getClient()).subscriptions.cancel(subscriptions[0].id);
     await this._subscriptionService.deleteSubscription(customer);
 
     return { cancelled: true };
@@ -1008,7 +1041,7 @@ export class StripeService {
     }
 
     return (
-      await stripe.subscriptions.list({
+      await (await this.getClient()).subscriptions.list({
         customer: paymentId,
         status: 'all',
         expand: ['data.discounts.source.coupon'],
@@ -1028,6 +1061,7 @@ export class StripeService {
     );
 
     const coupons = this.mapSubscriptionDiscounts(stripeSubscription);
+    const pricing = await this._pricingPlansService.getPricingMap();
     const priceData = subscription
       ? pricing[subscription.subscriptionTier]
       : undefined;
@@ -1036,7 +1070,7 @@ export class StripeService {
     let nextPayment: number | null = null;
     if (stripeSubscription) {
       try {
-        const preview = await stripe.invoices.createPreview({
+        const preview = await (await this.getClient()).invoices.createPreview({
           customer: org!.paymentId!,
           subscription: stripeSubscription.id,
         });
@@ -1098,7 +1132,7 @@ export class StripeService {
       };
     }
 
-    const coupon = await stripe.coupons.create({
+    const coupon = await (await this.getClient()).coupons.create({
       name: `Admin coupon for ${org!.name}`,
       ...(body.type === 'percentage'
         ? { percent_off: body.value }
@@ -1109,7 +1143,7 @@ export class StripeService {
       metadata: { service: 'gitroom', organizationId },
     });
 
-    await stripe.subscriptions.update(stripeSubscription.id, {
+    await (await this.getClient()).subscriptions.update(stripeSubscription.id, {
       discounts: [
         {
           coupon: coupon.id,
@@ -1140,7 +1174,7 @@ export class StripeService {
       };
     }
 
-    await stripe.subscriptions.deleteDiscount(stripeSubscription.id);
+    await (await this.getClient()).subscriptions.deleteDiscount(stripeSubscription.id);
 
     return { cancelled: true };
   }
@@ -1157,7 +1191,7 @@ export class StripeService {
     const customer = org.paymentId;
 
     const subscriptions = (
-      await stripe.subscriptions.list({
+      await (await this.getClient()).subscriptions.list({
         customer,
         status: 'all',
       })
@@ -1171,7 +1205,7 @@ export class StripeService {
     }
 
     const charges = (
-      await stripe.charges.list({
+      await (await this.getClient()).charges.list({
         customer,
         limit: 100,
       })
@@ -1197,7 +1231,7 @@ export class StripeService {
       }
 
       try {
-        const invoice = await stripe.invoices.retrieve(invoiceId);
+        const invoice = await (await this.getClient()).invoices.retrieve(invoiceId);
         const invoiceSubscription =
           invoice.parent?.subscription_details?.subscription;
         const subscriptionId =
@@ -1269,7 +1303,7 @@ export class StripeService {
 
     const org = await this._organizationService.getOrgById(organizationId);
 
-    await stripe.refunds.create({
+    await (await this.getClient()).refunds.create({
       charge: preview.chargeId,
       amount: Math.round(preview.amount * 100),
       metadata: {
@@ -1279,7 +1313,7 @@ export class StripeService {
     });
 
     for (const subscriptionId of preview.subscriptionIds) {
-      await stripe.subscriptions.cancel(subscriptionId);
+      await (await this.getClient()).subscriptions.cancel(subscriptionId);
     }
 
     if (preview.subscriptionIds.length) {
@@ -1313,6 +1347,7 @@ export class StripeService {
       }
 
       const nextPackage = !getCurrentSubscription ? 'STANDARD' : 'PRO';
+      const pricing = await this._pricingPlansService.getPricingMap();
       const findPricing = pricing[nextPackage];
 
       await this._subscriptionService.createOrUpdateSubscription(

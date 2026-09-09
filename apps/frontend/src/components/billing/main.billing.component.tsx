@@ -11,7 +11,8 @@ import { deleteDialog } from '@gitroom/react/helpers/delete.dialog';
 import { useToaster } from '@gitroom/react/toaster/toaster';
 import dayjs from 'dayjs';
 import clsx from 'clsx';
-import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { usePricingPlans } from '@gitroom/frontend/lib/billing/use-pricing-plans';
+import { formatPlanPrice } from '@gitroom/frontend/lib/billing/currency-display';
 import { FAQComponent } from '@gitroom/frontend/components/billing/faq.component';
 import { useSWRConfig } from 'swr';
 import { useUser } from '@gitroom/frontend/components/layout/user.context';
@@ -37,6 +38,7 @@ export const Prorate: FC<{
   const { period, pack } = props;
   const t = useT();
   const fetch = useFetch();
+  const { currencySymbol, inrToUsdRate } = useVariables();
   const [price, setPrice] = useState<number | false>(0);
   const [loading, setLoading] = useState(false);
   const calculatePrice = useDebouncedCallback(async () => {
@@ -72,7 +74,12 @@ export const Prorate: FC<{
   }
   return (
     <div className="text-[12px] flex pt-[12px]">
-      ({t('pay_today', 'Pay Today')} ${(price < 0 ? 0 : price)?.toFixed(1)})
+      ({t('pay_today', 'Pay Today')}{' '}
+      {formatPlanPrice(price < 0 ? 0 : price, {
+        currencySymbol: currencySymbol || '$',
+        inrToUsdRate: inrToUsdRate ?? null,
+      })}
+      )
     </div>
   );
 };
@@ -80,6 +87,7 @@ export const Features: FC<{
   pack: 'FREE' | 'STANDARD' | 'PRO';
 }> = (props) => {
   const { pack } = props;
+  const { data: pricing } = usePricingPlans();
   const features = useMemo(() => {
     const currentPricing = pricing[pack];
     const channelsOr = currentPricing.channel;
@@ -110,7 +118,7 @@ export const Features: FC<{
       list.push(`${currentPricing?.generate_videos} AI Videos per month`);
     }
     return list;
-  }, [pack]);
+  }, [pack, pricing]);
   return (
     <div className="flex flex-col gap-[10px] justify-center text-[16px] text-customColor18">
       {features.map((feature) => (
@@ -213,7 +221,8 @@ export const MainBillingComponent: FC<{
   sub?: Subscription;
 }> = (props) => {
   const { sub } = props;
-  const { isGeneral } = useVariables();
+  const { data: pricing } = usePricingPlans();
+  const { isGeneral, currencySymbol, inrToUsdRate } = useVariables();
   const { mutate } = useSWRConfig();
   const fetch = useFetch();
   const toast = useToaster();
@@ -455,7 +464,7 @@ export const MainBillingComponent: FC<{
         }
         setLoading(false);
       },
-    [monthlyOrYearly, subscription, user, utm]
+    [monthlyOrYearly, subscription, user, utm, pricing]
   );
   if (user?.isLifetime) {
     router.replace('/');
@@ -486,10 +495,12 @@ export const MainBillingComponent: FC<{
               <div className="text-[18px]">{name}</div>
               <div className="text-[38px] flex gap-[2px] items-center">
                 <div>
-                  $
-                  {monthlyOrYearly === 'on'
-                    ? values.year_price
-                    : values.month_price}
+                  {formatPlanPrice(
+                    monthlyOrYearly === 'on'
+                      ? values.year_price
+                      : values.month_price,
+                    { currencySymbol: currencySymbol || '$', inrToUsdRate: inrToUsdRate ?? null }
+                  )}
                 </div>
                 <div className={`text-[14px] text-customColor18`}>
                   {monthlyOrYearly === 'on' ? '/year' : '/month'}

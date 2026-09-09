@@ -979,3 +979,302 @@ model Announcement {
   color       AnnouncementColor @default(INFO)
   createdAt   DateTime          @default(now())
 }
+
+// Singleton row (id is always the literal string "default") holding the
+// admin-configured active payment gateway plus (as of the Payment Gateway
+// credentials feature) the Stripe/RazorPay credentials themselves. A
+// non-null value here always wins over the matching env var - see
+// payment-gateway-settings.service.ts's resolveActiveGateway() /
+// resolveStripeCredentials() / resolveRazorpayCredentials(), which mirror
+// the DB-first/env-fallback precedence used elsewhere in this codebase.
+// StripeService/RazorpayService resolve their API clients from this row
+// (via PaymentGatewaySettingsService) instead of reading
+// STRIPE_SECRET_KEY/RAZORPAY_API_KEY/RAZORPAY_API_SECRET directly, so an
+// admin-saved key here takes effect immediately, without a redeploy.
+model PaymentGatewaySettings {
+  id            String   @id @default("default")
+  activeGateway String?
+
+  // Admin-configurable gateway credentials (Admin Panel -> Payment Gateway).
+  // DB value always wins over the matching env var when non-empty; falls
+  // back to STRIPE_SECRET_KEY / RAZORPAY_API_KEY+RAZORPAY_API_SECRET
+  // otherwise - see PaymentGatewaySettingsService.resolveStripeCredentials/
+  // resolveRazorpayCredentials. Nullable and additive so this is a safe
+  // push against the existing production row (NULL == "not set, use env").
+  stripeSecretKey   String?
+  razorpayKeyId     String?
+  razorpayKeySecret String?
+
+  // Admin-editable USD->INR display rate (Admin Panel -> Payment Gateway),
+  // used ONLY to render an estimated INR price on marketing/billing pages
+  // when RazorPay is the active gateway - see
+  // PaymentGatewaySettingsService.resolveCurrencyDisplay(). Null/unset
+  // falls back to FALLBACK_INR_TO_USD_RATE. This never affects what
+  // RazorPay actually charges: that amount is fixed by whichever
+  // RAZORPAY_{TIER}_PLAN_{PERIOD} Plan ID is configured (see pricing.ts's
+  // own doc comment) - keep this rate in sync with those Plans' real
+  // amounts so the displayed estimate doesn't drift from the real charge.
+  inrToUsdRate  Float?
+
+  updatedAt     DateTime @default(now()) @updatedAt
+}
+
+// ─── Pricing Plans ────────────────────────────────────────────────────────
+
+// Admin-editable version of what used to be the hardcoded
+// subscriptions/pricing.ts object. One row per tier - FREE plus every
+// SubscriptionTier enum value (STANDARD/TEAM/PRO/ULTIMATE). `tier` is a
+// fixed, known set (not a free-form slug): the admin UI can edit an
+// existing tier's price/features/copy/limits, but can never add or
+// delete a tier, since SubscriptionTier is a compile-time Prisma enum
+// used throughout permission/feature-gating checks (see
+// PricingPlansService's own doc comment for the full list of call
+// sites this backs). Seeded on first read from the original pricing.ts
+// values (PricingPlansService.ensureDefaultsSeeded) so this table always
+// has real starting data, never blank rows - same seeding pattern as
+// StaticPage below, tagged with the same 'system:default-seed' sentinel
+// in `updatedBy` so the admin UI's "customized" indicator can tell a
+// still-default row apart from a real admin edit.
+model PricingPlan {
+  id   String @id @default(uuid())
+  tier String @unique
+
+  displayName String
+  description String?
+  // Optional marketing pill, e.g. "Most popular" - unset by default for
+  // every tier (this table doesn't invent a "most popular" designation
+  // that didn't exist before; an admin can set one from the new screen).
+  badge String?
+  // Marketing bullet copy shown on the public pricing page - replaces the
+  // old hand-maintained MARKETING_TIERS mirror in
+  // apps/frontend/src/components/marketing/pricing-tiers.ts, which had to
+  // be updated by hand every time pricing.ts changed.
+  features Json @default("[]")
+
+  // Base USD amounts. There is no separate stored INR price - INR is a
+  // display-time conversion using PaymentGatewaySettingsService's existing
+  // admin-configurable rate (see currency-display.ts's formatPlanPrice),
+  // exactly like vantly-ugc.com's own plans table.
+  monthPrice Float
+  yearPrice  Float
+
+  // Feature limits - same fields/semantics as the old
+  // PricingInnerInterface (subscriptions/pricing.ts), now DB-backed.
+  channel                Int
+  postsPerMonth          Int
+  teamMembers            Boolean
+  communityFeatures      Boolean
+  featuredByGitroom      Boolean
+  ai                     Boolean
+  importFromChannels     Boolean
+  imageGenerator         Boolean @default(false)
+  imageGenerationCount   Int
+  generateVideos         Int
+  youtubeTextSuggestions Int
+  publicApi              Boolean
+  webhooks               Int
+  autoPost               Boolean
+
+  // Admin-settable RazorPay Plan ids (Admin Panel -> Plans & Pricing).
+  // DB-first, falls back to the matching RAZORPAY_{TIER}_PLAN_{PERIOD} env
+  // var when null - see PricingPlansService.resolveRazorpayPlanId(). Since
+  // RazorPay treats Plans as immutable once created, changing monthPrice/
+  // yearPrice here does NOT retroactively change what an existing RazorPay
+  // Plan charges: a new Plan must be created in the RazorPay Dashboard for
+  // the new amount and its id pasted in here (or left blank to keep using
+  // the env var).
+  razorpayPlanIdMonthly String?
+  razorpayPlanIdYearly  String?
+
+  isActive      Boolean @default(true)
+  isPurchasable Boolean @default(true)
+  sortOrder     Int     @default(0)
+
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([isActive])
+}
+
+// ─── Content Management ──────────────────────────────────────────────────
+
+enum BlogPostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model BlogPost {
+  id             String         @id @default(uuid())
+  slug           String         @unique
+  title          String
+  excerpt        String?
+  coverImageUrl  String?
+  contentHtml    String
+  status         BlogPostStatus @default(DRAFT)
+  seoDescription String?
+  publishedAt    DateTime?
+  createdBy      String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([status])
+  @@index([publishedAt])
+}
+
+// Fixed, admin-editable set of marketing pages (home/pricing/privacy/
+// terms/contact - see StaticPageSlug in get-static-page.ts). A missing row
+// for a slug means "use the page's hardcoded default copy", exactly like
+// vantly-ugc's static_pages - so shipping this feature can never blank out
+// an existing page.
+model StaticPage {
+  id                 String   @id @default(uuid())
+  slug               String   @unique
+  title              String?
+  contentHtml        String?
+  heroImageUrl       String?
+  heroVideoUrl       String?
+  heroOverlayOpacity Float?
+  ctaPrimaryText     String?
+  ctaSecondaryText   String?
+  updatedBy          String?
+  updatedAt          DateTime @updatedAt
+}
+
+// ─── Mailer ───────────────────────────────────────────────────────────────
+
+enum EmailGroupType {
+  MANUAL
+  ALL_USERS
+  SMART
+}
+
+// Recipient list for admin mailer campaigns, targeting this platform's own
+// Users (mirrors the original "Subscribers / Free / All, for mailer
+// campaigns" admin request) - NOT per-organization contacts.
+//   MANUAL     -> memberEmails is the list
+//   ALL_USERS  -> every User, resolved live at send time
+//   SMART      -> smartRules (e.g. {"hasSubscription": true}) evaluated
+//                 live against User/Subscription at send time
+// See mailer-recipients.service.ts for resolution.
+model EmailGroup {
+  id           String         @id @default(uuid())
+  name         String
+  description  String?
+  type         EmailGroupType @default(MANUAL)
+  memberEmails String[]       @default([])
+  smartRules   Json?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  campaigns    EmailCampaign[]
+
+  @@index([type])
+}
+
+// A reusable email design. htmlContent is the final email-safe HTML
+// (table-based layout); when it was authored in the drag-and-drop
+// Template Designer, htmlContent also carries a leading
+// `<!--BUILDER_STATE:<base64 json>-->` comment so re-opening the template
+// restores the structured block state instead of falling back to
+// source-HTML mode - same round-trip trick as vantly-ugc's
+// serialize.ts/deserializeBuilderState. isSample flags the seeded starter
+// templates so the admin UI can show them in a separate "Start from a
+// sample" picker without an admin being able to accidentally overwrite
+// them out of the main list (the UI always "duplicates" a sample instead
+// of editing it in place).
+model EmailTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  subject     String
+  htmlContent String
+  isSample    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  campaigns   EmailCampaign[]
+}
+
+enum EmailCampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+model EmailCampaign {
+  id              String              @id @default(uuid())
+  name            String
+  subject         String
+  templateId      String?
+  template        EmailTemplate?      @relation(fields: [templateId], references: [id])
+  groupId         String
+  group           EmailGroup          @relation(fields: [groupId], references: [id])
+  // Snapshot of the template's HTML at send time, so editing/deleting the
+  // template later never changes what a already-sent campaign shows in
+  // its own history.
+  htmlContent     String
+  status          EmailCampaignStatus @default(DRAFT)
+  scheduledFor    DateTime?
+  sentAt          DateTime?
+  totalRecipients Int                 @default(0)
+  sentCount       Int                 @default(0)
+  failedCount     Int                 @default(0)
+  // Dispatch does not run as its own Temporal workflow: sendNow() (see
+  // EmailCampaignService) batches recipients and calls the existing
+  // EmailService.sendEmail() per message, which itself signals the
+  // pre-existing durable sendEmailWorkflow queue (workflowId:'send_email').
+  // That queue's own per-message idempotency is what's relied on here, so
+  // no separate per-campaign workflow id is tracked on this model.
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  logs            EmailLog[]
+
+  @@index([status])
+  @@index([groupId])
+}
+
+enum EmailLogStatus {
+  PENDING
+  SENT
+  FAILED
+  OPENED
+  CLICKED
+}
+
+// One row per recipient per campaign - both the delivery record and the
+// open/click tracking pixel/link target (trackingToken).
+model EmailLog {
+  id            String         @id @default(uuid())
+  campaignId    String
+  campaign      EmailCampaign  @relation(fields: [campaignId], references: [id])
+  email         String
+  userId        String?
+  status        EmailLogStatus @default(PENDING)
+  trackingToken String         @unique @default(uuid())
+  error         String?
+  sentAt        DateTime?
+  openedAt      DateTime?
+  clickedAt     DateTime?
+  createdAt     DateTime       @default(now())
+
+  @@index([campaignId])
+  @@index([email])
+}
+
+// Emails that must never receive another mailer send - unsubscribed,
+// bounced, or complained. Keyed by email address (not userId) so
+// suppression survives account deletion/recreation, matching vantly-ugc's
+// email_suppressions. Checked by mailer-recipients.service.ts immediately
+// before every send.
+model EmailSuppression {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}

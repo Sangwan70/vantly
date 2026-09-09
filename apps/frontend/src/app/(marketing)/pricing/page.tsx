@@ -5,8 +5,15 @@ import { MarketingFooter } from '@gitroom/frontend/components/marketing/marketin
 import { PricingCards } from '@gitroom/frontend/components/marketing/pricing-cards.component';
 import { PricingComparisonTable } from '@gitroom/frontend/components/marketing/pricing-comparison-table.component';
 import { FaqAccordion } from '@gitroom/frontend/components/marketing/faq-accordion.component';
+import { getStaticPageOverride } from '@gitroom/frontend/components/legal/get-static-page';
+import { getMarketingPricingPlans } from '@gitroom/frontend/lib/billing/get-pricing-plans-marketing';
+import Image from 'next/image';
 
-export const dynamic = 'force-static';
+// See (marketing)/page.tsx's doc comment on the same change - switched
+// from force-static so an admin edit in Content Management (Settings ->
+// Content -> Pricing) shows up on the next request instead of only after
+// a rebuild.
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Pricing - Vantly',
@@ -47,24 +54,55 @@ const PRICING_FAQ = [
   },
 ];
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const [override, plans] = await Promise.all([
+    getStaticPageOverride('pricing'),
+    getMarketingPricingPlans(),
+  ]);
   return (
     <div className="min-h-screen w-full flex flex-col">
       <MarketingHeader />
 
       <main className="flex-1">
-        <section className="max-w-[1200px] mx-auto px-[20px] pt-[72px] pb-[56px] text-center">
+        {/* Hero - overridable from Admin Panel -> Content -> Pricing. */}
+        <section className="relative max-w-[1200px] mx-auto px-[20px] pt-[72px] pb-[56px] text-center overflow-hidden rounded-[24px]">
+          {(override?.heroImageUrl || override?.heroVideoUrl) && (
+            <div className="absolute inset-0 -z-10">
+              {override.heroVideoUrl ? (
+                <video
+                  src={override.heroVideoUrl}
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                />
+              ) : (
+                <Image
+                  src={override.heroImageUrl!}
+                  alt=""
+                  fill
+                  priority
+                  className="object-cover"
+                />
+              )}
+              <div
+                className="absolute inset-0 bg-black"
+                style={{ opacity: (override.heroOverlayOpacity ?? 45) / 100 }}
+              />
+            </div>
+          )}
           <h1 className="text-[34px] md:text-[48px] font-[700] -tracking-[0.8px] text-textColor">
-            Simple, transparent pricing
+            {override?.title || 'Simple, transparent pricing'}
           </h1>
           <p className="mt-[16px] text-[16px] leading-[1.6] text-textColor/65 max-w-[560px] mx-auto">
-            Start free. Upgrade when you need more connected channels, more
-            AI generations, or a team workspace. No hidden fees.
+            {override?.contentHtml ||
+              'Start free. Upgrade when you need more connected channels, more AI generations, or a team workspace. No hidden fees.'}
           </p>
         </section>
 
         <section className="max-w-[1200px] mx-auto px-[20px] pb-[88px]">
-          <PricingCards />
+          <PricingCards plans={plans} />
         </section>
 
         <section className="border-t border-fifth bg-newBgColorInner/40">
@@ -74,7 +112,7 @@ export default function PricingPage() {
                 Compare plans
               </h2>
             </div>
-            <PricingComparisonTable />
+            <PricingComparisonTable plans={plans} />
           </div>
         </section>
 

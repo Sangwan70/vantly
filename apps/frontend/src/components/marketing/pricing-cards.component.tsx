@@ -3,10 +3,17 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import clsx from 'clsx';
-import { MARKETING_TIERS } from '@gitroom/frontend/components/marketing/pricing-tiers';
+import { MarketingPricingPlan } from '@gitroom/frontend/lib/billing/get-pricing-plans-marketing';
+import { usePublicBillingCurrency } from '@gitroom/frontend/lib/billing/use-public-billing-currency';
+import { formatPlanPrice } from '@gitroom/frontend/lib/billing/currency-display';
 
-export const PricingCards = () => {
+// `plans` comes from the server component (pricing/page.tsx) via
+// getMarketingPricingPlans() - already filtered to active/purchasable,
+// non-FREE tiers and sorted for display, so this component only renders,
+// it never fetches or filters.
+export const PricingCards = ({ plans }: { plans: MarketingPricingPlan[] }) => {
   const [yearly, setYearly] = useState(false);
+  const currency = usePublicBillingCurrency();
 
   return (
     <div className="flex flex-col items-center gap-[40px]">
@@ -37,27 +44,32 @@ export const PricingCards = () => {
       </div>
 
       <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[20px]">
-        {MARKETING_TIERS.map((tier) => {
+        {plans.map((tier) => {
           const displayPrice = yearly
             ? Math.round(tier.yearPrice / 12)
             : tier.monthPrice;
           return (
             <div
-              key={tier.key}
-              className="flex flex-col rounded-[16px] border border-fifth bg-newBgColorInner p-[24px]"
+              key={tier.tier}
+              className="relative flex flex-col rounded-[16px] border border-fifth bg-newBgColorInner p-[24px]"
             >
+              {tier.badge && (
+                <span className="absolute -top-[11px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-btnPrimary text-white text-[11px] font-[600] px-[12px] py-[4px]">
+                  {tier.badge}
+                </span>
+              )}
               <p className="text-[16px] font-[600] text-textColor">
-                {tier.name}
+                {tier.displayName}
               </p>
               <div className="mt-[12px] flex items-end gap-[6px]">
                 <span className="text-[36px] font-[700] text-textColor -tracking-[0.5px]">
-                  ${displayPrice}
+                  {formatPlanPrice(displayPrice, currency)}
                 </span>
                 <span className="text-[13px] text-gray pb-[6px]">/ month</span>
               </div>
               <p className="text-[12px] text-gray mt-[2px]">
                 {yearly
-                  ? `Billed annually at $${tier.yearPrice} / year`
+                  ? `Billed annually at ${formatPlanPrice(tier.yearPrice, currency)} / year`
                   : 'Billed monthly, cancel anytime'}
               </p>
               <Link
@@ -84,8 +96,10 @@ export const PricingCards = () => {
 
       <p className="text-[13px] text-gray text-center max-w-[560px]">
         Every plan starts with a free account &mdash; no card required to sign
-        up. Prices shown in USD. Upgrade, downgrade, or cancel anytime from
-        Settings &rarr; Billing.
+        up. {currency.inrToUsdRate === null
+          ? 'Prices shown in USD.'
+          : 'Prices shown in INR - billed via RazorPay at checkout.'} Upgrade,
+        downgrade, or cancel anytime from Settings &rarr; Billing.
       </p>
     </div>
   );

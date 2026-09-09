@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import {
-  pricing,
-  PricingInnerInterface,
-} from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { PricingInnerInterface } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { PricingPlansService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing-plans.service';
 import { SubscriptionRepository } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.repository';
 import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
 import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
@@ -31,7 +29,8 @@ export class SubscriptionService {
   constructor(
     private readonly _subscriptionRepository: SubscriptionRepository,
     private readonly _integrationService: IntegrationService,
-    private readonly _organizationService: OrganizationService
+    private readonly _organizationService: OrganizationService,
+    private readonly _pricingPlansService: PricingPlansService
   ) {}
 
   getSubscriptionByOrganizationId(organizationId: string) {
@@ -53,6 +52,7 @@ export class SubscriptionService {
   }
 
   async deleteSubscription(customerId: string) {
+    const pricing = await this._pricingPlansService.getPricingMap();
     await this.modifySubscription(
       customerId,
       pricing.FREE.channel || 0,
@@ -91,6 +91,7 @@ export class SubscriptionService {
         organizationId
       ))!;
 
+    const pricing = await this._pricingPlansService.getPricingMap();
     const from = pricing[getCurrentSubscription?.subscriptionTier || 'FREE'];
     const to = pricing[billing];
 
@@ -152,6 +153,7 @@ export class SubscriptionService {
       return false;
     }
 
+    const pricing = await this._pricingPlansService.getPricingMap();
     const from = pricing[getCurrentSubscription?.subscriptionTier || 'FREE'];
     const to = pricing[billing];
 
@@ -252,6 +254,7 @@ export class SubscriptionService {
     const checkFromMonth = date.subtract(1, 'month');
     const creditField =
       SubscriptionService.CREDIT_FIELD_BY_TYPE[checkType] || 'generate_videos';
+    const pricing = await this._pricingPlansService.getPricingMap();
     const allowedCount = pricing[type][creditField] as number;
 
     const totalUse = await this._subscriptionRepository.getCreditsFrom(
@@ -283,6 +286,7 @@ export class SubscriptionService {
 
   async addSubscription(orgId: string, userId: string, subscription: any) {
     await this._subscriptionRepository.setCustomerId(orgId, userId);
+    const pricing = await this._pricingPlansService.getPricingMap();
     return this.createOrUpdateSubscription(
       false,
       makeId(5),

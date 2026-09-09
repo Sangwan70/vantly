@@ -25,12 +25,17 @@ const LogoutIcon: FC<{ width?: number; height?: number }> = ({
   </svg>
 );
 
-export const LogoutComponent: FC<{ isIcon?: boolean }> = ({ isIcon }) => {
+// Shared logout flow (confirm dialog -> clear session -> redirect home) -
+// pulled out of LogoutComponent so the left nav's Logout menu item
+// (top.menu.tsx) can trigger the exact same confirmation copy and
+// session-teardown logic via a MenuItem onClick, instead of a second,
+// slightly-different copy of it.
+export const useLogout = () => {
   const fetch = useFetch();
   const { isSecured } = useVariables();
   const t = useT();
 
-  const logout = useCallback(async () => {
+  return useCallback(async () => {
     if (
       await deleteDialog(
         t(
@@ -50,6 +55,11 @@ export const LogoutComponent: FC<{ isIcon?: boolean }> = ({ isIcon }) => {
       window.location.href = '/';
     }
   }, []);
+};
+
+export const LogoutComponent: FC<{ isIcon?: boolean }> = ({ isIcon }) => {
+  const t = useT();
+  const logout = useLogout();
   return (
     <>
       <div className="cursor-pointer" onClick={logout}>

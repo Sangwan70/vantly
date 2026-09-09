@@ -2,6 +2,7 @@
 
 import React, { ReactNode, useCallback, useEffect } from 'react';
 import { Logo } from '@gitroom/frontend/components/new-layout/logo';
+import Link from 'next/link';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 const ModeComponent = dynamic(
   () => import('@gitroom/frontend/components/layout/mode.component'),
@@ -14,7 +15,7 @@ import clsx from 'clsx';
 import dynamic from 'next/dynamic';
 import { useFetch } from '@gitroom/helpers/utils/custom.fetch';
 import { useVariables } from '@gitroom/react/helpers/variable.context';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, usePathname } from 'next/navigation';
 import useSWR from 'swr';
 import { CheckPayment } from '@gitroom/frontend/components/layout/check.payment';
 import { ToolTip } from '@gitroom/frontend/components/layout/top.tip';
@@ -56,6 +57,12 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
 
   // Feedback icon component attaches Sentry feedback to a top-bar icon when DSN is present
   const searchParams = useSearchParams();
+  // The Admin Panel (admin-shell.component.tsx) has its own internal
+  // sub-navigation, so the main app's left icon sidebar is just visual
+  // clutter (and confusingly implies it still applies) while inside it -
+  // hidden in favor of a single Back button that returns to the app.
+  const pathname = usePathname();
+  const isAdminPage = !!pathname?.startsWith('/admin');
   const load = useCallback(async (path: string) => {
     return await (await fetch(path)).json();
   }, []);
@@ -108,20 +115,52 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                   <AnnouncementBanner />
                   <div className="flex-1 flex gap-[8px]">
                     <Support />
-                    <div className="flex flex-col bg-newBgColorInner w-[80px] rounded-[12px]">
-                      <div
-                        id="left-menu"
-                        className={clsx(
-                          'fixed h-full w-[64px] start-[17px] flex flex-1 top-0',
-                          user?.admin && 'pt-[60px] max-h-[1000px]:w-[500px]'
-                        )}
-                      >
-                        <div className="flex flex-col h-full gap-[32px] flex-1 py-[12px]">
-                          <Logo />
-                          <TopMenu />
+                    {!isAdminPage && (
+                      <div className="flex flex-col bg-newBgColorInner w-[80px] rounded-[12px]">
+                        <div
+                          id="left-menu"
+                          className={clsx(
+                            'fixed h-full w-[64px] start-[17px] flex flex-1 top-0',
+                            user?.admin && 'pt-[60px] max-h-[1000px]:w-[500px]'
+                          )}
+                        >
+                          <div className="flex flex-col h-full gap-[32px] flex-1 py-[12px]">
+                            <Logo />
+                            <TopMenu />
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
+                    {isAdminPage && (
+                      <div className="flex flex-col bg-newBgColorInner w-[80px] rounded-[12px]">
+                        <div className="flex flex-col items-center py-[16px]">
+                          <Link
+                            href="/launches"
+                            title="Back to app"
+                            className="group w-[54px] h-[54px] flex flex-col items-center justify-center gap-[4px] rounded-[12px] text-textItemBlur hover:text-textItemFocused hover:bg-boxFocused transition-colors"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="20"
+                              height="20"
+                              viewBox="0 0 20 20"
+                              fill="none"
+                            >
+                              <path
+                                d="M12.5 15.833L6.66667 10l5.833-5.833"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                            <div className="text-[10px] leading-[1.1]">
+                              Back
+                            </div>
+                          </Link>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex-1 bg-newBgLineColor rounded-[12px] overflow-hidden flex flex-col gap-[1px] blurMe">
                       <div className="flex bg-newBgColorInner h-[80px] px-[20px] items-center">
                         <div className="text-[24px] font-[600] flex flex-1">

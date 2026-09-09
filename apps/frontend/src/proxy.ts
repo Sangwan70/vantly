@@ -86,11 +86,18 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/auth/login', nextUrl.href));
   }
 
-  // Public marketing pages: let logged-out visitors straight through instead
-  // of bouncing them to /auth. Logged-in users are unaffected by this check -
-  // they still get redirected from `/` to the app further below.
+  // Public marketing/legal pages: let logged-out visitors straight through
+  // instead of bouncing them to /auth. Logged-in users are unaffected by
+  // this check - they still get redirected from `/` to the app further
+  // below. /blog/* covers both the listing and individual post pages
+  // (apps/frontend/src/app/(marketing)/blog/[slug]); privacy/terms/contact
+  // are the (app)/privacy, (app)/terms, (app)/contact legal pages, which
+  // are equally meant to be readable by a logged-out visitor.
+  const PUBLIC_PATHS = ['/', '/pricing', '/privacy', '/terms', '/contact'];
   if (
-    (nextUrl.pathname === '/' || nextUrl.pathname === '/pricing') &&
+    (PUBLIC_PATHS.includes(nextUrl.pathname) ||
+      nextUrl.pathname === '/blog' ||
+      nextUrl.pathname.startsWith('/blog/')) &&
     !authCookie
   ) {
     return topResponse;

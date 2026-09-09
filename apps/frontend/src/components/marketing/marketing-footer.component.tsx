@@ -16,11 +16,17 @@ export const MarketingFooter = () => {
             <Link href="/pricing" className="hover:text-textColor transition-colors">
               Pricing
             </Link>
+            <Link href="/blog" className="hover:text-textColor transition-colors">
+              Blog
+            </Link>
             <Link href="/privacy" className="hover:text-textColor transition-colors">
               Privacy Policy
             </Link>
             <Link href="/terms" className="hover:text-textColor transition-colors">
               Terms of Service
+            </Link>
+            <Link href="/contact" className="hover:text-textColor transition-colors">
+              Contact Us
             </Link>
             <a href="mailto:we@vantly.social" className="hover:text-textColor transition-colors">
               we@vantly.social

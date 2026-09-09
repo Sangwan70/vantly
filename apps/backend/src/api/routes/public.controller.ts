@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpException,
   Param,
   Post,
   Query,
@@ -20,8 +21,12 @@ import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
 import { getCookieUrlFromDomain } from '@gitroom/helpers/subdomain/subdomain.management';
 import { AgentGraphInsertService } from '@gitroom/nestjs-libraries/agent/agent.graph.insert.service';
 import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
+import { PaymentGatewaySettingsService } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.service';
+import { BlogService } from '@gitroom/nestjs-libraries/database/prisma/content/blog.service';
+import { StaticPagesService } from '@gitroom/nestjs-libraries/database/prisma/content/static-pages.service';
+import { PricingPlansService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing-plans.service';
+import { EmailSuppressionService } from '@gitroom/nestjs-libraries/database/prisma/mailer/email-suppression.service';
 import { AuthService } from '@gitroom/helpers/auth/auth.service';
-import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
 import { Readable, pipeline } from 'stream';
 import { promisify } from 'util';
 import { OnlyURL } from '@gitroom/nestjs-libraries/dtos/webhooks/webhooks.dto';
@@ -37,8 +42,123 @@ export class PublicController {
     private _trackService: TrackService,
     private _agentGraphInsertService: AgentGraphInsertService,
     private _postsService: PostsService,
-    private _subscriptionService: SubscriptionService
+    private _subscriptionService: SubscriptionService,
+    private _paymentGatewaySettingsService: PaymentGatewaySettingsService,
+    private _blogService: BlogService,
+    private _staticPagesService: StaticPagesService,
+    private _pricingPlansService: PricingPlansService,
+    private _emailSuppressionService: EmailSuppressionService
   ) {}
+
+  // Public blog listing - server-rendered first page and the client
+  // "Load more" button both call this with the same offset/limit shape.
+  @Get('/blog/posts')
+  async listBlogPosts(
+    @Query('offset') offset?: string,
+    @Query('limit') limit?: string
+  ) {
+    const parsedOffset = offset ? parseInt(offset, 10) : 0;
+    const parsedLimit = limit ? Math.min(parseInt(limit, 10), 24) : undefined;
+    return this._blogService.listPublished(
+      Number.isFinite(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0,
+      Number.isFinite(parsedLimit) && (parsedLimit as number) > 0
+        ? parsedLimit
+        : undefined
+    );
+  }
+
+  @Get('/blog/posts/:slug')
+  async getBlogPost(@Param('slug') slug: string) {
+    const post = await this._blogService.getPublishedBySlug(slug);
+    if (!post) {
+      throw new HttpException('Not found', 404);
+    }
+    return post;
+  }
+
+  // Admin override for a fixed marketing-page slug, or null if none was
+  // ever set - callers fall back to their own hardcoded default copy.
+  @Get('/static-pages/:slug')
+  async getStaticPage(@Param('slug') slug: string) {
+    return (await this._staticPagesService.getBySlug(slug)) || null;
+  }
+
+  // Public (no auth) so logged-out visitors on the pricing page, and the
+  // (app) layout server component, always render checkout UI/prices for
+  // whichever gateway is actually active - see billing.controller.ts's
+  // isRazorpay() doc comment for why this is admin-configurable at runtime
+  // and can't be baked in at build time. Response is a superset of the
+  // original `{ activeGateway }` shape (additive fields only, so existing
+  // callers reading just that one field are unaffected): also carries the
+  // display currency (see resolveCurrencyDisplay's doc comment on why an
+  // INR amount here is an estimate, never the real charge), RazorPay's
+  // public key id (needed client-side to open Checkout.js), and whether
+  // the active gateway actually has usable credentials right now.
+  @Get('/billing/active-gateway')
+  async getActivePaymentGateway() {
+    return this._paymentGatewaySettingsService.resolvePublicBillingConfig();
+  }
+
+  // Live, DB-backed pricing map (Record<tier, PricingInnerInterface>,
+  // same snake_case shape the app used to import statically from
+  // subscriptions/pricing.ts) - public/no-auth so the authenticated
+  // frontend's usePricingPlans() hook (which can't reach VariableContext-
+  // gated data any earlier than this) and any future logged-out surface
+  // can both read current tier prices/limits without a privileged
+  // session. Never exposes admin-only fields like RazorPay Plan ids.
+  @Get('/pricing-plans')
+  async getPricingPlans() {
+    return this._pricingPlansService.getPricingMap();
+  }
+
+  // Marketing-card-shaped plan list for the public /pricing page -
+  // active, purchasable, non-FREE tiers only, ordered for display,
+  // trimmed to the fields the pricing cards/comparison table actually
+  // render (no internal admin metadata like updatedBy or gateway ids).
+  // Replaces the old hand-maintained MARKETING_TIERS mirror in
+  // marketing/pricing-tiers.ts, which had to be updated by hand every
+  // time the real pricing.ts values changed.
+  @Get('/pricing-plans/marketing')
+  async getMarketingPricingPlans() {
+    const rows = await this._pricingPlansService.listAllForAdmin();
+    return rows
+      .filter((row) => row.tier !== 'FREE' && row.isActive && row.isPurchasable)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((row) => ({
+        tier: row.tier,
+        displayName: row.displayName,
+        description: row.description,
+        badge: row.badge,
+        features: row.features,
+        monthPrice: row.monthPrice,
+        yearPrice: row.yearPrice,
+        channel: row.channel,
+        teamMembers: row.teamMembers,
+        communityFeatures: row.communityFeatures,
+        autoPost: row.autoPost,
+        imageGenerationCount: row.imageGenerationCount,
+        generateVideos: row.generateVideos,
+        youtubeTextSuggestions: row.youtubeTextSuggestions,
+        webhooks: row.webhooks,
+        publicApi: row.publicApi,
+      }));
+  }
+
+  // One-click unsubscribe link target embedded in every mailer campaign
+  // footer (see EmailSuppressionService.buildUnsubscribeUrl) - public, no
+  // auth, so it works directly from an email client.
+  @Get('/mailer/unsubscribe')
+  async unsubscribeFromMailer(@Query('token') token: string) {
+    if (!token) {
+      throw new HttpException('Missing token', 400);
+    }
+    const email = await this._emailSuppressionService.unsubscribeByToken(token);
+    if (!email) {
+      throw new HttpException('Invalid or expired unsubscribe link', 400);
+    }
+    return { success: true, email };
+  }
+
   @Post('/agent')
   async createAgent(@Body() body: { text: string; apiKey: string }) {
     if (
@@ -136,6 +256,7 @@ export class PublicController {
         billing: 'FREE' | 'STANDARD' | 'TEAM' | 'PRO' | 'ULTIMATE';
       };
 
+      const pricing = await this._pricingPlansService.getPricingMap();
       if (!load || !load.orgId || !load.billing || !pricing[load.billing]) {
         return { success: false };
       }

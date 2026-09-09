@@ -34,6 +34,10 @@ export const LegalPageLayout = ({
           <Link href="/terms" className="underline hover:font-[600]">
             Terms of Service
           </Link>
+          <span className="mx-[10px]">&middot;</span>
+          <Link href="/contact" className="underline hover:font-[600]">
+            Contact Us
+          </Link>
         </div>
       </div>
     </div>

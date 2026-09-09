@@ -13,6 +13,7 @@ import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/n
 import { Request } from 'express';
 import { AuthService } from '@gitroom/helpers/auth/auth.service';
 import { UsersService } from '@gitroom/nestjs-libraries/database/prisma/users/users.service';
+import { PaymentGatewaySettingsService } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.service';
 
 @ApiTags('Billing')
 @Controller('/billing')
@@ -22,7 +23,8 @@ export class BillingController {
     private _stripeService: StripeService,
     private _razorpayService: RazorpayService,
     private _notificationService: NotificationService,
-    private _usersService: UsersService
+    private _usersService: UsersService,
+    private _paymentGatewaySettingsService: PaymentGatewaySettingsService
   ) {}
 
   private async assertNoOtherSubscribedAccount(user: User) {
@@ -33,13 +35,26 @@ export class BillingController {
     return !!other;
   }
 
-  // Gateway selection is a single global env var, read at request time (not
-  // build time) - see razorpay.service.ts's top docstring and the delivery
-  // notes for why this differs from AutoGPT's split
-  // backend-var/NEXT_PUBLIC_-var approach. Defaults to Stripe so existing
-  // deployments with no PAYMENT_GATEWAY set keep working unchanged.
-  private isRazorpay(): boolean {
-    return process.env.PAYMENT_GATEWAY === 'razorpay';
+  // Which gateway a brand-new subscription should use - admin-configurable
+  // (Settings -> Payment Gateway), DB-first, PAYMENT_GATEWAY env var as
+  // fallback, razorpay as the ultimate default. See
+  // payment-gateway-settings.service.ts.
+  //
+  // Deliberately NOT used for actions on an EXISTING org's subscription
+  // (see isOrgOnRazorpay() below) - this can change at any time via the
+  // Admin Panel, and current subscribers must keep being serviced by
+  // whichever gateway they actually subscribed through.
+  private isRazorpay(): Promise<boolean> {
+    return this._paymentGatewaySettingsService.isRazorpayActive();
+  }
+
+  // Which gateway THIS organization's existing subscription actually runs
+  // on, independent of the current global default above.
+  // razorpaySubscriptionId is only ever set by razorpay.service.ts's
+  // subscribe(), so its presence is a reliable per-org signal - see
+  // Organization.razorpaySubscriptionId's doc comment in schema.prisma.
+  private isOrgOnRazorpay(org: Organization): boolean {
+    return !!org.razorpaySubscriptionId;
   }
 
   @Get('/check/:id')
@@ -117,7 +132,7 @@ export class BillingController {
 
     const uniqueId = req?.cookies?.track;
 
-    if (this.isRazorpay()) {
+    if (await this.isRazorpay()) {
       return this._razorpayService.subscribe(
         uniqueId,
         org.id,
@@ -165,7 +180,7 @@ export class BillingController {
       user.email
     );
 
-    if (this.isRazorpay()) {
+    if (this.isOrgOnRazorpay(org)) {
       return this._razorpayService.setToCancel(org.id);
     }
 

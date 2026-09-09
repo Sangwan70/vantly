@@ -1,9 +1,11 @@
 import {
+  Body,
   Controller,
   Get,
   HttpException,
   Param,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { GetUserFromRequest } from '@gitroom/nestjs-libraries/user/user.from.request';
@@ -12,6 +14,8 @@ import { ApiTags } from '@nestjs/swagger';
 import { ErrorsService } from '@gitroom/nestjs-libraries/database/prisma/errors/errors.service';
 import { AdminStatsService } from '@gitroom/nestjs-libraries/database/prisma/admin-stats/admin-stats.service';
 import { UsersService } from '@gitroom/nestjs-libraries/database/prisma/users/users.service';
+import { PaymentGatewaySettingsService } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.service';
+import { PaymentGatewaySettingsDto } from '@gitroom/nestjs-libraries/dtos/settings/payment-gateway-settings.dto';
 import dayjs from 'dayjs';
 
 @ApiTags('Admin')
@@ -20,7 +24,8 @@ export class AdminController {
   constructor(
     private _errorsService: ErrorsService,
     private _adminStatsService: AdminStatsService,
-    private _usersService: UsersService
+    private _usersService: UsersService,
+    private _paymentGatewaySettingsService: PaymentGatewaySettingsService
   ) {}
 
   private assertSuperAdmin(user: User) {
@@ -45,6 +50,26 @@ export class AdminController {
     this.assertSuperAdmin(user);
     await this._usersService.unbanUser(id);
     return { banned: false };
+  }
+
+  // Which gateway new subscriptions use, and whether that's an explicit
+  // admin override or the PAYMENT_GATEWAY env var / built-in default
+  // (razorpay). See payment-gateway-settings.service.ts's doc comment for
+  // why this ONLY affects new subscriptions, not existing orgs' billing
+  // actions.
+  @Get('/settings/payment-gateway')
+  async getPaymentGatewaySettings(@GetUserFromRequest() user: User) {
+    this.assertSuperAdmin(user);
+    return this._paymentGatewaySettingsService.getPublicSettings();
+  }
+
+  @Put('/settings/payment-gateway')
+  async updatePaymentGatewaySettings(
+    @GetUserFromRequest() user: User,
+    @Body() body: PaymentGatewaySettingsDto
+  ) {
+    this.assertSuperAdmin(user);
+    return this._paymentGatewaySettingsService.updateSettings(body);
   }
 
   @Get('/errors')

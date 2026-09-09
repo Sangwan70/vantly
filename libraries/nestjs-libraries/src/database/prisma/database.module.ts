@@ -46,6 +46,23 @@ import { ErrorsService } from '@gitroom/nestjs-libraries/database/prisma/errors/
 import { AdminStatsRepository } from '@gitroom/nestjs-libraries/database/prisma/admin-stats/admin-stats.repository';
 import { AdminStatsService } from '@gitroom/nestjs-libraries/database/prisma/admin-stats/admin-stats.service';
 import { YoutubeOptimizerService } from '@gitroom/nestjs-libraries/youtube-optimizer/youtube.optimizer.service';
+import { PaymentGatewaySettingsRepository } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.repository';
+import { PaymentGatewaySettingsService } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.service';
+import { BlogRepository } from '@gitroom/nestjs-libraries/database/prisma/content/blog.repository';
+import { BlogService } from '@gitroom/nestjs-libraries/database/prisma/content/blog.service';
+import { StaticPagesRepository } from '@gitroom/nestjs-libraries/database/prisma/content/static-pages.repository';
+import { StaticPagesService } from '@gitroom/nestjs-libraries/database/prisma/content/static-pages.service';
+import { PricingPlansRepository } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing-plans.repository';
+import { PricingPlansService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing-plans.service';
+import { MailerRecipientsService } from '@gitroom/nestjs-libraries/database/prisma/mailer/mailer-recipients.service';
+import { EmailGroupRepository } from '@gitroom/nestjs-libraries/database/prisma/mailer/email-group.repository';
+import { EmailGroupService } from '@gitroom/nestjs-libraries/database/prisma/mailer/email-group.service';
+import { EmailTemplateRepository } from '@gitroom/nestjs-libraries/database/prisma/mailer/email-template.repository';
+import { EmailTemplateService } from '@gitroom/nestjs-libraries/database/prisma/mailer/email-template.service';
+import { EmailCampaignRepository } from '@gitroom/nestjs-libraries/database/prisma/mailer/email-campaign.repository';
+import { EmailCampaignService } from '@gitroom/nestjs-libraries/database/prisma/mailer/email-campaign.service';
+import { EmailSuppressionRepository } from '@gitroom/nestjs-libraries/database/prisma/mailer/email-suppression.repository';
+import { EmailSuppressionService } from '@gitroom/nestjs-libraries/database/prisma/mailer/email-suppression.service';
 
 @Global()
 @Module({
@@ -101,6 +118,23 @@ import { YoutubeOptimizerService } from '@gitroom/nestjs-libraries/youtube-optim
     AdminStatsRepository,
     AdminStatsService,
     YoutubeOptimizerService,
+    PaymentGatewaySettingsRepository,
+    PaymentGatewaySettingsService,
+    BlogRepository,
+    BlogService,
+    StaticPagesRepository,
+    StaticPagesService,
+    PricingPlansRepository,
+    PricingPlansService,
+    MailerRecipientsService,
+    EmailGroupRepository,
+    EmailGroupService,
+    EmailTemplateRepository,
+    EmailTemplateService,
+    EmailCampaignRepository,
+    EmailCampaignService,
+    EmailSuppressionRepository,
+    EmailSuppressionService,
   ],
   get exports() {
     return this.providers;

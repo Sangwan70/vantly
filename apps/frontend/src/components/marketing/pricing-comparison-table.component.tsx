@@ -1,4 +1,4 @@
-import { MARKETING_TIERS } from '@gitroom/frontend/components/marketing/pricing-tiers';
+import { MarketingPricingPlan } from '@gitroom/frontend/lib/billing/get-pricing-plans-marketing';
 
 const CheckOrDash = ({ value }: { value: boolean }) =>
   value ? (
@@ -7,50 +7,58 @@ const CheckOrDash = ({ value }: { value: boolean }) =>
     <span className="text-gray">&mdash;</span>
   );
 
-export const PricingComparisonTable = () => {
+// `plans` comes from the server component (pricing/page.tsx) via
+// getMarketingPricingPlans() - same data source as PricingCards, so the
+// two never drift from each other the way the old hand-maintained
+// MARKETING_TIERS mirror could.
+export const PricingComparisonTable = ({
+  plans,
+}: {
+  plans: MarketingPricingPlan[];
+}) => {
   const rows: {
     label: string;
     values: (string | boolean)[];
   }[] = [
     {
       label: 'Connected channels',
-      values: MARKETING_TIERS.map((t) => `${t.channels}`),
+      values: plans.map((t) => `${t.channel}`),
     },
     {
       label: 'Scheduled posts',
-      values: MARKETING_TIERS.map(() => 'Unlimited'),
+      values: plans.map(() => 'Unlimited'),
     },
     {
       label: 'Team members',
-      values: MARKETING_TIERS.map((t) => t.teamMembers),
+      values: plans.map((t) => t.teamMembers),
     },
     {
       label: 'Auto-posting',
-      values: MARKETING_TIERS.map((t) => t.autoPost),
+      values: plans.map((t) => t.autoPost),
     },
     {
       label: 'Community features',
-      values: MARKETING_TIERS.map((t) => t.communityFeatures),
+      values: plans.map((t) => t.communityFeatures),
     },
     {
       label: 'AI image generations / mo',
-      values: MARKETING_TIERS.map((t) => `${t.imageGenerations}`),
+      values: plans.map((t) => `${t.imageGenerationCount}`),
     },
     {
       label: 'AI video generations / mo',
-      values: MARKETING_TIERS.map((t) => `${t.videoGenerations}`),
+      values: plans.map((t) => `${t.generateVideos}`),
     },
     {
       label: 'YouTube Optimizer AI suggestions / mo',
-      values: MARKETING_TIERS.map((t) => `${t.youtubeAiSuggestions}`),
+      values: plans.map((t) => `${t.youtubeTextSuggestions}`),
     },
     {
       label: 'Public API access',
-      values: MARKETING_TIERS.map(() => true),
+      values: plans.map((t) => t.publicApi),
     },
     {
       label: 'Webhooks',
-      values: MARKETING_TIERS.map((t) => `${t.webhooks}`),
+      values: plans.map((t) => `${t.webhooks}`),
     },
   ];
 
@@ -62,12 +70,12 @@ export const PricingComparisonTable = () => {
             <th className="text-left py-[14px] px-[12px] font-[500] text-gray">
               Feature
             </th>
-            {MARKETING_TIERS.map((tier) => (
+            {plans.map((tier) => (
               <th
-                key={tier.key}
+                key={tier.tier}
                 className="text-center py-[14px] px-[12px] font-[600] text-textColor"
               >
-                {tier.name}
+                {tier.displayName}
               </th>
             ))}
           </tr>
@@ -80,7 +88,7 @@ export const PricingComparisonTable = () => {
               </td>
               {row.values.map((value, index) => (
                 <td
-                  key={MARKETING_TIERS[index].key}
+                  key={plans[index].tier}
                   className="text-center py-[12px] px-[12px] text-textColor/90"
                 >
                   {typeof value === 'boolean' ? (

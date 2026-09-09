@@ -11,7 +11,8 @@ import { AttachToFeedbackIcon } from '@gitroom/frontend/components/new-layout/se
 import NotificationComponent from '@gitroom/frontend/components/notifications/notification.component';
 import dynamic from 'next/dynamic';
 import { LogoTextComponent } from '@gitroom/frontend/components/ui/logo-text.component';
-import { pricing } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing';
+import { usePricingPlans } from '@gitroom/frontend/lib/billing/use-pricing-plans';
+import { formatPlanPrice } from '@gitroom/frontend/lib/billing/currency-display';
 import { capitalize } from 'lodash';
 import clsx from 'clsx';
 import { LoadingComponent } from '@gitroom/frontend/components/layout/loading';
@@ -49,7 +50,7 @@ const EmbeddedBilling = dynamic(
 );
 
 export const FirstBillingComponent = () => {
-  const { stripeClient, paymentGateway } = useVariables();
+  const { stripeClient, paymentGateway, currencySymbol, inrToUsdRate } = useVariables();
   const isRazorpay = paymentGateway === 'razorpay';
   const user = useUser();
   const dub = useDubClickId();
@@ -158,9 +159,10 @@ export const FirstBillingComponent = () => {
     }
   );
 
+  const { data: pricing } = usePricingPlans();
   const price = useMemo(
     () => Object.entries(pricing).filter(([key, value]) => key !== 'FREE'),
-    []
+    [pricing]
   );
 
   const JoinOver = () => {
@@ -351,12 +353,12 @@ export const FirstBillingComponent = () => {
                     </div>
                     <div className="text-[24px] mobile:text-[18px] font-[400]">
                       <span className="text-[44px] mobile:text-[30px] font-[600]">
-                        $
-                        {
+                        {formatPlanPrice(
                           value[
                             period === 'MONTHLY' ? 'month_price' : 'year_price'
-                          ]
-                        }
+                          ],
+                          { currencySymbol: currencySymbol || '$', inrToUsdRate: inrToUsdRate ?? null }
+                        )}
                       </span>{' '}
                       {period === 'MONTHLY'
                         ? t('billing_per_month', '/ month')
@@ -392,6 +394,7 @@ type FeatureItem = {
 
 export const BillingFeatures: FC<{ tier: string }> = ({ tier }) => {
   const t = useT();
+  const { data: pricing } = usePricingPlans();
   const features = useMemo(() => {
     const currentPricing = pricing[tier];
     const channelsOr = currentPricing.channel;
@@ -448,7 +451,7 @@ export const BillingFeatures: FC<{ tier: string }> = ({ tier }) => {
       });
     }
     return list;
-  }, [tier]);
+  }, [tier, pricing]);
 
   const renderFeature = (feature: FeatureItem) => {
     const translatedText = t(feature.key, feature.defaultValue);
