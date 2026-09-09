@@ -257,15 +257,22 @@ export class IntegrationService {
     return this._integrationRepository.disableChannel(org, id);
   }
 
-  async enableChannel(org: string, totalChannels: number, id: string) {
+  async enableChannel(
+    org: string,
+    totalChannels: number,
+    id: string,
+    isSuperAdmin = false
+  ) {
     const integrations = (
       await this._integrationRepository.getIntegrationsList(org)
     ).filter((f) => !f.disabled);
     // See PaymentGatewaySettingsService.isBillingEnforced's doc comment -
     // replaces the old `!!process.env.STRIPE_PUBLISHABLE_KEY` billing-off
-    // proxy that misfired on a RazorPay-configured deployment.
+    // proxy that misfired on a RazorPay-configured deployment. isSuperAdmin
+    // exempts the deployment's own admin account(s), same as /user/self.
     const billingEnforced =
-      await this._paymentGatewaySettingsService.isBillingEnforced();
+      (await this._paymentGatewaySettingsService.isBillingEnforced()) &&
+      !isSuperAdmin;
     if (billingEnforced && integrations.length >= totalChannels) {
       throw new Error('You have reached the maximum number of channels');
     }

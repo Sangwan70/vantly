@@ -118,8 +118,17 @@ export class UsersController {
     // PaymentGatewaySettingsService.isBillingEnforced's doc comment for
     // why that check silently granted every user free ULTIMATE access on
     // a RazorPay-configured deployment.
+    //
+    // `isSuperAdmin` accounts are additionally exempted from billing
+    // entirely (same as an unbilled install) - without this, the
+    // deployment's own admin account(s) would be blocked by the same
+    // FREE-tier limits as any other user the moment billing is actually
+    // enforced, since they were never issued a real subscription record
+    // (their previous free access was purely a side effect of the bug
+    // above, not a deliberate admin exemption).
     const billingEnforced =
-      await this._paymentGatewaySettingsService.isBillingEnforced();
+      (await this._paymentGatewaySettingsService.isBillingEnforced()) &&
+      !user.isSuperAdmin;
     // @ts-ignore
     return {
       ...user,

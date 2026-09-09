@@ -44,10 +44,14 @@ export class PoliciesGuard implements CanActivate {
     // @ts-expect-error
     const { org }: { org: Organization } = request;
 
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-expect-error
+    const { user } = request;
+
     const refreshChannelId = typeof request.query?.refresh === 'string' ? request.query.refresh : undefined;
 
     // @ts-ignore
-    const ability = await this._authorizationService.check(org.id, org.createdAt, org.users[0].role, policyHandlers, refreshChannelId);
+    const ability = await this._authorizationService.check(org.id, org.createdAt, org.users[0].role, policyHandlers, refreshChannelId, !!user?.isSuperAdmin);
 
     const item = policyHandlers.find(
       (handler) => !this.execPolicyHandler(handler, ability)

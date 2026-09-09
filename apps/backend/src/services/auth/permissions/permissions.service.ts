@@ -21,7 +21,10 @@ export class PermissionsService {
     private _pricingPlansService: PricingPlansService,
     private _paymentGatewaySettingsService: PaymentGatewaySettingsService
   ) {}
-  async getPackageOptions(orgId: string) {
+  // `isSuperAdmin` (the site-wide admin flag, not an org role) exempts the
+  // deployment's own admin accounts from billing enforcement - see
+  // PermissionsService.check's doc comment for why this exemption exists.
+  async getPackageOptions(orgId: string, isSuperAdmin = false) {
     const subscription =
       await this._subscriptionService.getSubscriptionByOrganizationId(orgId);
 
@@ -29,7 +32,8 @@ export class PermissionsService {
     // replaces the old `!process.env.STRIPE_PUBLISHABLE_KEY` billing-off
     // proxy that misfired on a RazorPay-configured deployment.
     const billingEnforced =
-      await this._paymentGatewaySettingsService.isBillingEnforced();
+      (await this._paymentGatewaySettingsService.isBillingEnforced()) &&
+      !isSuperAdmin;
     const tier = subscription?.subscriptionTier || (!billingEnforced ? 'PRO' : 'FREE');
 
     const pricing = await this._pricingPlansService.getPricingMap();
@@ -43,19 +47,27 @@ export class PermissionsService {
     };
   }
 
+  // `isSuperAdmin` exempts the deployment's own admin accounts from billing
+  // enforcement entirely (unlimited channels/posts/etc, same as an unbilled
+  // install) - without this, an admin account with no real subscription
+  // record would be blocked by the same limits as any other FREE-tier user,
+  // since isSuperAdmin was previously only ever checked for admin-route
+  // access, never for billing/tier.
   async check(
     orgId: string,
     created_at: Date,
     permission: 'USER' | 'ADMIN' | 'SUPERADMIN',
     requestedPermission: Array<[AuthorizationActions, Sections]>,
-    refreshChannelId?: string
+    refreshChannelId?: string,
+    isSuperAdmin = false
   ) {
     const { can, build } = new AbilityBuilder<
       Ability<[AuthorizationActions, Sections]>
     >(Ability as AbilityClass<AppAbility>);
 
     const billingEnforced =
-      await this._paymentGatewaySettingsService.isBillingEnforced();
+      (await this._paymentGatewaySettingsService.isBillingEnforced()) &&
+      !isSuperAdmin;
     if (requestedPermission.length === 0 || !billingEnforced) {
       for (const [action, section] of requestedPermission) {
         can(action, section);
@@ -68,7 +80,10 @@ export class PermissionsService {
       });
     }
 
-    const { subscription, options } = await this.getPackageOptions(orgId);
+    const { subscription, options } = await this.getPackageOptions(
+      orgId,
+      isSuperAdmin
+    );
     for (const [action, section] of requestedPermission) {
       // check for the amount of channels
       if (section === Sections.CHANNEL) {

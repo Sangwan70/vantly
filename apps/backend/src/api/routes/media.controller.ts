@@ -62,8 +62,16 @@ export class MediaController {
     // See PaymentGatewaySettingsService.isBillingEnforced's doc comment -
     // replaces the old `process.env.STRIPE_PUBLISHABLE_KEY` billing-off
     // proxy that misfired on a RazorPay-configured deployment.
+    //
+    // Read directly off `req.user` (rather than a decorated parameter)
+    // since this method is also invoked as a plain internal call from
+    // generateImageFromText below, which bypasses Nest's decorator
+    // pipeline - isSuperAdmin exempts the deployment's own admin
+    // account(s) from billing the same way it does on /user/self.
     const billingEnforced =
-      await this._paymentGatewaySettingsService.isBillingEnforced();
+      (await this._paymentGatewaySettingsService.isBillingEnforced()) &&
+      !(req as unknown as { user?: { isSuperAdmin?: boolean } }).user
+        ?.isSuperAdmin;
     if (billingEnforced && total.credits <= 0) {
       return false;
     }

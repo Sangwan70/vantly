@@ -255,6 +255,14 @@ module.exports = {
         tablet: {
           raw: '(max-width: 1300px)',
         },
+        // Wider than `tablet` - used by the billing/paywall page so its
+        // two-column layout (a fixed-width pricing panel next to a
+        // flex-grow intro column) stacks before common laptop widths
+        // (1280-1440px) squeeze the flex-grow column down to roughly the
+        // same width as the fixed one, which read as a broken 50/50 split.
+        laptop: {
+          raw: '(max-width: 1600px)',
+        },
         iconBreak: {
           raw: '(max-width: 1560px)',
         },

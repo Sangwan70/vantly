@@ -399,6 +399,7 @@ export class IntegrationsController {
   @Post('/enable')
   async enableChannel(
     @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User,
     @Body('id') id: string
   ) {
     const pricing = await this._pricingPlansService.getPricingMap();
@@ -406,7 +407,8 @@ export class IntegrationsController {
       org.id,
       // @ts-ignore
       org?.subscription?.totalChannels || pricing.FREE.channel,
-      id
+      id,
+      !!user?.isSuperAdmin
     );
   }
 
