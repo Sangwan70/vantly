@@ -489,9 +489,9 @@ const PricingPlanEditor: FC<{
           variables, or paste a freshly-created Plan id here after changing
           the price above. &quot;Sync to RazorPay&quot; creates whichever of
           the two ids below is still blank directly via the RazorPay API
-          (using the price above and the INR rate from Settings -> Payment
-          Gateway) - it never touches an id that's already set, so it's
-          always safe to click again.
+          (using the price above and the INR rate from Settings -&gt; Payment
+          Gateway) - it never touches an id that&apos;s already set, so
+          it&apos;s always safe to click again.
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-[12px]">
           <Input
