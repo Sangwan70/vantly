@@ -21,9 +21,11 @@ import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/o
 import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
 import { getCookieUrlFromDomain } from '@gitroom/helpers/subdomain/subdomain.management';
 import { PricingPlansService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing-plans.service';
+import { PaymentGatewaySettingsService } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.service';
 import { ApiTags } from '@nestjs/swagger';
 import { UsersService } from '@gitroom/nestjs-libraries/database/prisma/users/users.service';
 import { UserDetailDto } from '@gitroom/nestjs-libraries/dtos/users/user.details.dto';
+import { ChangePasswordDto } from '@gitroom/nestjs-libraries/dtos/users/change-password.dto';
 import { EmailNotificationsDto } from '@gitroom/nestjs-libraries/dtos/users/email-notifications.dto';
 import { HttpForbiddenException } from '@gitroom/nestjs-libraries/services/exception.filter';
 import { RealIP } from 'nestjs-real-ip';
@@ -46,7 +48,8 @@ export class UsersController {
     private _orgService: OrganizationService,
     private _userService: UsersService,
     private _trackService: TrackService,
-    private _pricingPlansService: PricingPlansService
+    private _pricingPlansService: PricingPlansService,
+    private _paymentGatewaySettingsService: PaymentGatewaySettingsService
   ) {}
 
   @Get('/chatbase-token')
@@ -110,27 +113,32 @@ export class UsersController {
 
     const impersonate = req.cookies.impersonate || req.headers.impersonate;
     const pricing = await this._pricingPlansService.getPricingMap();
+    // Gateway-agnostic replacement for the old `!process.env.
+    // STRIPE_PUBLISHABLE_KEY` billing-off proxy - see
+    // PaymentGatewaySettingsService.isBillingEnforced's doc comment for
+    // why that check silently granted every user free ULTIMATE access on
+    // a RazorPay-configured deployment.
+    const billingEnforced =
+      await this._paymentGatewaySettingsService.isBillingEnforced();
     // @ts-ignore
     return {
       ...user,
       orgId: organization.id,
-      totalChannels: !process.env.STRIPE_PUBLISHABLE_KEY
+      totalChannels: !billingEnforced
         ? 10000
         : // @ts-ignore
           organization?.subscription?.totalChannels || pricing.FREE.channel,
       tier:
         // @ts-ignore
         organization?.subscription?.subscriptionTier ||
-        (!process.env.STRIPE_PUBLISHABLE_KEY ? 'ULTIMATE' : 'FREE'),
+        (!billingEnforced ? 'ULTIMATE' : 'FREE'),
       // @ts-ignore
       role: organization?.users[0]?.role,
       // @ts-ignore
       isLifetime: !!organization?.subscription?.isLifetime,
       admin: !!user.isSuperAdmin,
       impersonate: !!impersonate,
-      isTrailing: !process.env.STRIPE_PUBLISHABLE_KEY
-        ? false
-        : organization?.isTrailing,
+      isTrailing: !billingEnforced ? false : organization?.isTrailing,
       allowTrial: organization?.allowTrial,
       streakSince: organization?.streakSince || null,
       publicApi:
@@ -238,6 +246,22 @@ export class UsersController {
     @Body() body: UserDetailDto
   ) {
     return this._userService.changePersonal(user.id, body);
+  }
+
+  @Post('/change-password')
+  async changePassword(
+    @GetUserFromRequest() user: User,
+    @Body() body: ChangePasswordDto
+  ) {
+    try {
+      return await this._userService.changePassword(
+        user.id,
+        body.oldPassword,
+        body.password
+      );
+    } catch (err) {
+      throw new HttpException((err as Error).message, 400);
+    }
   }
 
   @Get('/email-notifications')

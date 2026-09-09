@@ -32,6 +32,10 @@ import { useT } from '@gitroom/react/translation/get.transation.service.client';
 import { SVGLine } from '@gitroom/frontend/components/launches/launches.component';
 import { GlobalSettings } from '@gitroom/frontend/components/settings/global.settings';
 import { ApprovedAppsComponent } from '@gitroom/frontend/components/approved-apps/approved-apps.component';
+import { Input } from '@gitroom/react/form/input';
+import { Textarea } from '@gitroom/react/form/textarea';
+import { Button } from '@gitroom/react/form/button';
+import { ChangePasswordComponent } from '@gitroom/frontend/components/settings/change-password.component';
 export const SettingsPopup: FC<{
   getRef?: Ref<any>;
 }> = (props) => {
@@ -57,6 +61,7 @@ export const SettingsPopup: FC<{
   const loadProfile = useCallback(async () => {
     const personal = await (await fetch('/user/personal')).json();
     form.setValue('fullname', personal.name || '');
+    form.setValue('lastName', personal.lastName || '');
     form.setValue('bio', personal.bio || '');
     form.setValue('picture', personal.picture);
   }, []);
@@ -86,6 +91,7 @@ export const SettingsPopup: FC<{
   const t = useT();
   const list = useMemo(() => {
     const arr = [];
+    arr.push({ tab: 'profile', label: t('profile', 'Profile') });
     arr.push({ tab: 'global_settings', label: t('global_settings', 'Global Settings') });
     // Populate tabs based on user permissions
     if (user?.tier?.team_members && isGeneral) {
@@ -160,6 +166,52 @@ export const SettingsPopup: FC<{
                 !getRef && 'rounded-[4px]'
               )}
             >
+              {tab === 'profile' && (
+                <div className="flex flex-col gap-[24px]">
+                  <div className="flex flex-col gap-[16px] bg-sixth border-fifth border rounded-[4px] p-[24px]">
+                    <h3 className="text-[20px]">
+                      {t('profile', 'Profile')}
+                    </h3>
+                    <div className="flex items-center gap-[20px]">
+                      <img
+                        src={picture?.path || '/no-picture.jpg'}
+                        alt="Profile picture"
+                        className="w-[80px] h-[80px] rounded-full object-cover"
+                      />
+                      <div className="flex gap-[12px]">
+                        <Button type="button" onClick={openMedia}>
+                          {t('upload', 'Upload')}
+                        </Button>
+                        {!!picture && (
+                          <Button type="button" secondary onClick={remove}>
+                            {t('remove', 'Remove')}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <Input
+                      label={t('first_name', 'First Name')}
+                      name="fullname"
+                      placeholder=""
+                    />
+                    <Input
+                      label={t('last_name', 'Last Name')}
+                      name="lastName"
+                      placeholder=""
+                    />
+                    <Textarea
+                      label={t('bio', 'Bio')}
+                      name="bio"
+                      placeholder=""
+                    />
+                    <div>
+                      <Button type="submit">{t('save', 'Save')}</Button>
+                    </div>
+                  </div>
+                  {user?.providerName === 'LOCAL' && <ChangePasswordComponent />}
+                </div>
+              )}
+
               {tab === 'global_settings' && (
                 <div>
                   <GlobalSettings />

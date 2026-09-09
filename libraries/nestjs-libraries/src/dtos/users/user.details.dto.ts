@@ -13,6 +13,10 @@ export class UserDetailDto {
 
   @IsString()
   @IsOptional()
+  lastName: string;
+
+  @IsString()
+  @IsOptional()
   bio: string;
 
   @IsOptional()

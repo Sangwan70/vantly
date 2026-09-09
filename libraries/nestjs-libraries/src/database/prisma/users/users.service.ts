@@ -5,6 +5,7 @@ import { UserDetailDto } from '@gitroom/nestjs-libraries/dtos/users/user.details
 import { EmailNotificationsDto } from '@gitroom/nestjs-libraries/dtos/users/email-notifications.dto';
 import { OrganizationRepository } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.repository';
 import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/notifications/notification.service';
+import { AuthService as AuthChecker } from '@gitroom/helpers/auth/auth.service';
 
 @Injectable()
 export class UsersService {
@@ -118,6 +119,32 @@ export class UsersService {
 
   updatePassword(id: string, password: string) {
     return this._usersRepository.updatePassword(id, password);
+  }
+
+  // Throws a plain Error (not HttpException) for expected, user-actionable
+  // failures (wrong current password, OAuth account with no password) -
+  // the controller catches and re-throws these as a proper 400 so the
+  // message reaches the settings UI instead of being masked by Nest's
+  // default 500 handler.
+  async changePassword(
+    userId: string,
+    oldPassword: string,
+    newPassword: string
+  ) {
+    const user = await this._usersRepository.getUserById(userId);
+
+    if (!user || user.providerName !== Provider.LOCAL || !user.password) {
+      throw new Error(
+        'Password change is not available for this account.'
+      );
+    }
+
+    if (!AuthChecker.comparePassword(oldPassword, user.password)) {
+      throw new Error('Current password is incorrect.');
+    }
+
+    await this._usersRepository.updatePassword(userId, newPassword);
+    return { success: true };
   }
 
   getPersonal(userId: string) {

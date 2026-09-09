@@ -221,11 +221,17 @@ export class OrganizationRepository {
     });
   }
 
+  // billingEnforced is computed by the Service layer
+  // (PaymentGatewaySettingsService.isBillingEnforced) and passed in rather
+  // than read from process.env here directly, keeping this repository a
+  // pure data-access layer per CLAUDE.md's Service>>Repository rule - see
+  // OrganizationService.addUserToOrg.
   async addUserToOrg(
     userId: string,
     id: string,
     orgId: string,
-    role: 'USER' | 'ADMIN'
+    role: 'USER' | 'ADMIN',
+    billingEnforced: boolean
   ) {
     const checkIfInviteExists = await this._user.model.user.findFirst({
       where: {
@@ -248,7 +254,7 @@ export class OrganizationRepository {
       });
 
     if (
-      process.env.STRIPE_PUBLISHABLE_KEY &&
+      billingEnforced &&
       checkForSubscription?.subscription?.subscriptionTier ===
         SubscriptionTier.STANDARD
     ) {

@@ -24,6 +24,7 @@ import {
 import { HtmlComponent } from '@gitroom/frontend/components/layout/html.component';
 import Script from 'next/script';
 import { ChangeDirClient } from '@gitroom/frontend/components/new-layout/change.dir.client';
+import { resolveBillingConfig } from '@gitroom/frontend/lib/billing/resolve-billing-config';
 
 const jakartaSans = Plus_Jakarta_Sans({
   weight: ['600', '500'],
@@ -31,55 +32,6 @@ const jakartaSans = Plus_Jakarta_Sans({
   subsets: ['latin'],
 });
 
-interface BillingConfig {
-  activeGateway: 'stripe' | 'razorpay';
-  currencySymbol: string;
-  inrToUsdRate: number | null;
-  razorpayKeyId: string;
-  billingEnabled: boolean;
-}
-
-// Everything this layout needs to render checkout UI/prices for whichever
-// gateway is actually active, resolved the same way the backend resolves
-// it (Settings -> Payment Gateway admin override, DB-first, else env vars,
-// else razorpay/USD) - see payment-gateway-settings.service.ts's
-// resolvePublicBillingConfig(). Reading process.env.PAYMENT_GATEWAY /
-// RAZORPAY_API_KEY directly here would ignore any admin override made
-// through the Admin Panel (a DB-only RazorPay key with no env var set, for
-// instance), since this app has no direct DB access of its own - it only
-// talks to the backend over HTTP. Falls back to the same env-var-driven
-// defaults if the backend call itself fails, so a slow/unreachable backend
-// degrades to "best guess" rather than breaking the whole page.
-async function resolveBillingConfig(): Promise<BillingConfig> {
-  const fallbackGateway = process.env.PAYMENT_GATEWAY === 'stripe' ? 'stripe' : 'razorpay';
-  const fallback: BillingConfig = {
-    activeGateway: fallbackGateway,
-    currencySymbol: fallbackGateway === 'razorpay' ? '\u20b9' : '$',
-    inrToUsdRate: null,
-    razorpayKeyId: process.env.RAZORPAY_API_KEY || '',
-    billingEnabled:
-      fallbackGateway === 'razorpay'
-        ? !!process.env.RAZORPAY_API_KEY
-        : !!process.env.STRIPE_PUBLISHABLE_KEY,
-  };
-  try {
-    const res = await fetch(
-      `${process.env.BACKEND_INTERNAL_URL}/public/billing/active-gateway`,
-      { cache: 'no-store' }
-    );
-    if (!res.ok) return fallback;
-    const data = (await res.json()) as Partial<BillingConfig>;
-    return {
-      activeGateway: data.activeGateway === 'stripe' ? 'stripe' : 'razorpay',
-      currencySymbol: data.currencySymbol || fallback.currencySymbol,
-      inrToUsdRate: data.inrToUsdRate ?? null,
-      razorpayKeyId: data.razorpayKeyId ?? fallback.razorpayKeyId,
-      billingEnabled: data.billingEnabled ?? fallback.billingEnabled,
-    };
-  } catch {
-    return fallback;
-  }
-}
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const cookieStore = await cookies();

@@ -234,6 +234,35 @@ export class PaymentGatewaySettingsService {
     };
   }
 
+  /**
+   * Whether billing is actually enforced right now: true only when the
+   * CURRENTLY ACTIVE gateway (Stripe or RazorPay - see
+   * resolveActiveGateway) has real, usable credentials (DB or env).
+   *
+   * Before RazorPay existed, every plan-limit/permission check in this
+   * codebase used a bare `!!process.env.STRIPE_PUBLISHABLE_KEY` as a proxy
+   * for "is this a self-hosted/dev install with billing turned off" - if
+   * unset, treat everyone as unlimited/ULTIMATE. That was fine when Stripe
+   * was the only gateway, but a deployment that configures RazorPay
+   * instead of Stripe never sets STRIPE_PUBLISHABLE_KEY at all, so every
+   * one of those checks silently misread "billing IS configured, just not
+   * via Stripe" as "billing is off" - granting every user free ULTIMATE
+   * access and skipping plan-limit enforcement app-wide. This method
+   * replaces that env var read everywhere it was being used as a
+   * billing-on/off switch (see call sites), while preserving the original
+   * intent for a genuinely unconfigured install (no gateway credentials
+   * anywhere): still treated as billing-off, exactly as before.
+   */
+  async isBillingEnforced(): Promise<boolean> {
+    const activeGateway = await this.resolveActiveGateway();
+    if (activeGateway === 'stripe') {
+      const stripe = await this.resolveStripeCredentials();
+      return !!stripe.secretKey;
+    }
+    const razorpay = await this.resolveRazorpayCredentials();
+    return !!(razorpay.keyId && razorpay.keySecret);
+  }
+
   /** Shape returned to the admin UI (GET/PUT /admin/settings/payment-gateway)
    * - secrets never appear here, only a `set`/`source` indicator per
    * credential, mirroring vantly-ugc.com's Payment Gateways tab so a value

@@ -6,6 +6,7 @@ import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/po
 import { IntegrationService } from '@gitroom/nestjs-libraries/database/prisma/integrations/integration.service';
 import dayjs from 'dayjs';
 import { WebhooksService } from '@gitroom/nestjs-libraries/database/prisma/webhooks/webhooks.service';
+import { PaymentGatewaySettingsService } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.service';
 import { AuthorizationActions, Sections } from './permission.exception.class';
 
 export type AppAbility = Ability<[AuthorizationActions, Sections]>;
@@ -17,15 +18,19 @@ export class PermissionsService {
     private _postsService: PostsService,
     private _integrationService: IntegrationService,
     private _webhooksService: WebhooksService,
-    private _pricingPlansService: PricingPlansService
+    private _pricingPlansService: PricingPlansService,
+    private _paymentGatewaySettingsService: PaymentGatewaySettingsService
   ) {}
   async getPackageOptions(orgId: string) {
     const subscription =
       await this._subscriptionService.getSubscriptionByOrganizationId(orgId);
 
-    const tier =
-      subscription?.subscriptionTier ||
-      (!process.env.STRIPE_PUBLISHABLE_KEY ? 'PRO' : 'FREE');
+    // See PaymentGatewaySettingsService.isBillingEnforced's doc comment -
+    // replaces the old `!process.env.STRIPE_PUBLISHABLE_KEY` billing-off
+    // proxy that misfired on a RazorPay-configured deployment.
+    const billingEnforced =
+      await this._paymentGatewaySettingsService.isBillingEnforced();
+    const tier = subscription?.subscriptionTier || (!billingEnforced ? 'PRO' : 'FREE');
 
     const pricing = await this._pricingPlansService.getPricingMap();
     const { channel, ...all } = pricing[tier];
@@ -49,10 +54,9 @@ export class PermissionsService {
       Ability<[AuthorizationActions, Sections]>
     >(Ability as AbilityClass<AppAbility>);
 
-    if (
-      requestedPermission.length === 0 ||
-      !process.env.STRIPE_PUBLISHABLE_KEY
-    ) {
+    const billingEnforced =
+      await this._paymentGatewaySettingsService.isBillingEnforced();
+    if (requestedPermission.length === 0 || !billingEnforced) {
       for (const [action, section] of requestedPermission) {
         can(action, section);
       }

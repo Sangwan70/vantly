@@ -222,7 +222,10 @@ export class UsersRepository {
       select: {
         id: true,
         name: true,
+        lastName: true,
         bio: true,
+        email: true,
+        providerName: true,
         picture: {
           select: {
             id: true,
@@ -242,6 +245,7 @@ export class UsersRepository {
       },
       data: {
         name: body.fullname,
+        lastName: body.lastName,
         bio: body.bio,
         picture: body.picture
           ? {

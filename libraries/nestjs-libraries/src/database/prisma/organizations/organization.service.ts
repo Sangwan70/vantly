@@ -5,6 +5,7 @@ import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/n
 import { AddTeamMemberDto } from '@gitroom/nestjs-libraries/dtos/settings/add.team.member.dto';
 import { AdminAddTeamMemberDto } from '@gitroom/nestjs-libraries/dtos/settings/admin.add.team.member.dto';
 import { PricingPlansService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing-plans.service';
+import { PaymentGatewaySettingsService } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.service';
 import { AuthService } from '@gitroom/helpers/auth/auth.service';
 import dayjs from 'dayjs';
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
@@ -16,7 +17,8 @@ export class OrganizationService {
   constructor(
     private _organizationRepository: OrganizationRepository,
     private _notificationsService: NotificationService,
-    private _pricingPlansService: PricingPlansService
+    private _pricingPlansService: PricingPlansService,
+    private _paymentGatewaySettingsService: PaymentGatewaySettingsService
   ) {}
   async createOrgAndUser(
     body: Omit<CreateOrgUserDto, 'providerToken'> & { providerId?: string },
@@ -51,13 +53,21 @@ export class OrganizationService {
     return this._organizationRepository.createMaxUser(id, name, saasName, email);
   }
 
-  addUserToOrg(
+  async addUserToOrg(
     userId: string,
     id: string,
     orgId: string,
     role: 'USER' | 'ADMIN'
   ) {
-    return this._organizationRepository.addUserToOrg(userId, id, orgId, role);
+    const billingEnforced =
+      await this._paymentGatewaySettingsService.isBillingEnforced();
+    return this._organizationRepository.addUserToOrg(
+      userId,
+      id,
+      orgId,
+      role,
+      billingEnforced
+    );
   }
 
   getOrgById(id: string) {
@@ -130,10 +140,15 @@ export class OrganizationService {
   }
 
   async addTeamMemberByEmail(org: Organization, body: AdminAddTeamMemberDto) {
+    // See PaymentGatewaySettingsService.isBillingEnforced's doc comment -
+    // replaces the old `!process.env.STRIPE_PUBLISHABLE_KEY` billing-off
+    // proxy that misfired on a RazorPay-configured deployment.
+    const billingEnforced =
+      await this._paymentGatewaySettingsService.isBillingEnforced();
     const tier =
       // @ts-ignore
       org?.subscription?.subscriptionTier ||
-      (!process.env.STRIPE_PUBLISHABLE_KEY ? 'ULTIMATE' : 'FREE');
+      (!billingEnforced ? 'ULTIMATE' : 'FREE');
 
     const pricing = await this._pricingPlansService.getPricingMap();
     if (!pricing[tier].team_members) {
@@ -173,7 +188,8 @@ export class OrganizationService {
       user.id,
       makeId(5),
       org.id,
-      body.role as 'USER' | 'ADMIN'
+      body.role as 'USER' | 'ADMIN',
+      billingEnforced
     );
 
     if (!added) {

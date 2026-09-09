@@ -26,6 +26,7 @@ import utc from 'dayjs/plugin/utc';
 import { AutopostRepository } from '@gitroom/nestjs-libraries/database/prisma/autopost/autopost.repository';
 import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
 import { TemporalService } from 'nestjs-temporal-core';
+import { PaymentGatewaySettingsService } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.service';
 
 dayjs.extend(utc);
 
@@ -39,7 +40,8 @@ export class IntegrationService {
     private _notificationService: NotificationService,
     @Inject(forwardRef(() => RefreshIntegrationService))
     private _refreshIntegrationService: RefreshIntegrationService,
-    private _temporalService: TemporalService
+    private _temporalService: TemporalService,
+    private _paymentGatewaySettingsService: PaymentGatewaySettingsService
   ) {}
 
   async changeActiveCron(orgId: string) {
@@ -259,10 +261,12 @@ export class IntegrationService {
     const integrations = (
       await this._integrationRepository.getIntegrationsList(org)
     ).filter((f) => !f.disabled);
-    if (
-      !!process.env.STRIPE_PUBLISHABLE_KEY &&
-      integrations.length >= totalChannels
-    ) {
+    // See PaymentGatewaySettingsService.isBillingEnforced's doc comment -
+    // replaces the old `!!process.env.STRIPE_PUBLISHABLE_KEY` billing-off
+    // proxy that misfired on a RazorPay-configured deployment.
+    const billingEnforced =
+      await this._paymentGatewaySettingsService.isBillingEnforced();
+    if (billingEnforced && integrations.length >= totalChannels) {
       throw new Error('You have reached the maximum number of channels');
     }
 

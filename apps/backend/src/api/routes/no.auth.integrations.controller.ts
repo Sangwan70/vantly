@@ -23,6 +23,7 @@ import {
 } from '@gitroom/backend/services/auth/permissions/permission.exception.class';
 import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
 import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
+import { PaymentGatewaySettingsService } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.service';
 import { getSsrfSafeDispatcher } from '@gitroom/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 
 @ApiTags('Integrations')
@@ -32,7 +33,8 @@ export class NoAuthIntegrationsController {
     private _integrationManager: IntegrationManager,
     private _integrationService: IntegrationService,
     private _refreshIntegrationService: RefreshIntegrationService,
-    private _organizationService: OrganizationService
+    private _organizationService: OrganizationService,
+    private _paymentGatewaySettingsService: PaymentGatewaySettingsService
   ) {}
 
   @Get('/')
@@ -225,8 +227,13 @@ export class NoAuthIntegrationsController {
       }
     }
 
+    // See PaymentGatewaySettingsService.isBillingEnforced's doc comment -
+    // replaces the old `process.env.STRIPE_PUBLISHABLE_KEY` billing-off
+    // proxy that misfired on a RazorPay-configured deployment.
+    const billingEnforced =
+      await this._paymentGatewaySettingsService.isBillingEnforced();
     if (
-      process.env.STRIPE_PUBLISHABLE_KEY &&
+      billingEnforced &&
       org.isTrailing &&
       (await this._integrationService.checkPreviousConnections(
         org.id,
