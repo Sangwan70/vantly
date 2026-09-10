@@ -168,7 +168,7 @@ export const FirstBillingComponent = () => {
   const JoinOver = () => {
     return (
       <>
-        <div className="text-[46px] font-[600] leading-[110%] laptop:text-[36px] mobile:!text-[30px] whitespace-pre-line text-balance">
+        <div className="text-[46px] font-[600] leading-[110%] mobile:!text-[30px] whitespace-pre-line text-balance text-center">
           {t('billing_join_over', 'Join Over')}{' '}
           <span className="text-[#FC69FF]">
             {t('billing_entrepreneurs_count', '20,000+ Entrepreneurs')}
@@ -180,8 +180,8 @@ export const FirstBillingComponent = () => {
           )}
         </div>
 
-        <div className="flex" onClick={showYouTube}>
-          <div className="laptop:mb-[32px] cursor-pointer mt-[32px] flex gap-[10px] items-center underline hover:font-[700]">
+        <div className="flex justify-center" onClick={showYouTube}>
+          <div className="mb-[32px] cursor-pointer mt-[32px] flex gap-[10px] items-center underline hover:font-[700]">
             <div>
               <SafeImage
                 className="text-[12px]"
@@ -196,14 +196,14 @@ export const FirstBillingComponent = () => {
         </div>
 
         {!!user?.allowTrial && (
-          <div className="flex mt-[32px] mb-[10px] gap-[15px] laptop:mt-[32px] laptop:mb-[32px] text-[16px] font-[500] mobile:flex-col">
+          <div className="flex flex-wrap mt-[32px] mb-[10px] gap-x-[24px] gap-y-[12px] text-[16px] font-[500] mobile:flex-col justify-center">
             <div className="flex gap-[8px]">
               <div>
                 <CheckIconComponent />
               </div>
               <div>{t('billing_no_risk_trial', '100% No-Risk Free Trial')}</div>
             </div>
-            <div className="flex-1 flex gap-[8px] justify-center mobile:justify-start">
+            <div className="flex gap-[8px]">
               <div>
                 <CheckIconComponent />
               </div>
@@ -254,56 +254,23 @@ export const FirstBillingComponent = () => {
           </div>
         </div>
       </div>
-      <div className="flex px-[80px] laptop:px-[32px] mobile:!px-[16px] flex-1 flex-row laptop:flex-none laptop:flex-col-reverse">
-        <div className="flex-1 py-[40px] laptop:pt-[80px] flex flex-col pe-[40px] laptop:pe-0">
-          <div className="block laptop:hidden">
-            <JoinOver />
-          </div>
-          {data?.blocked ? (
-            <div className="mt-[24px] p-[24px] rounded-[20px] border-[1.5px] border-newColColor text-[16px] font-[500]">
-              {t(
-                'billing_other_account_subscribed',
-                'Another account with this email already has an active subscription. Please log off and sign in to that account to manage your subscription.'
-              )}
-            </div>
-          ) : isRazorpay ? (
-            <div className="mt-[24px] p-[24px] rounded-[20px] border-[1.5px] border-newColColor flex flex-col gap-[16px]">
-              <div className="text-[16px] font-[500]">
-                {t(
-                  'billing_razorpay_summary',
-                  `You're subscribing to the ${capitalize(tier)} plan, billed ${
-                    period === 'MONTHLY' ? 'monthly' : 'yearly'
-                  } in INR via RazorPay.`
-                )}
-              </div>
-              <button
-                type="button"
-                disabled={razorpayLoading}
-                onClick={subscribeWithRazorpay}
-                className="h-[48px] px-[24px] rounded-[12px] bg-boxFocused text-textItemFocused font-[600] disabled:opacity-60"
-              >
-                {razorpayLoading
-                  ? t('billing_loading', 'Loading...')
-                  : t('billing_subscribe_with_razorpay', 'Subscribe with RazorPay')}
-              </button>
-            </div>
-          ) : !isLoading && data && stripe ? (
-            <EmbeddedBilling
-              stripe={stripe}
-              secret={data.client_secret}
-              showCoupon={period === 'MONTHLY'}
-              autoApplyCoupon={data.auto_apply_coupon}
-            />
-          ) : (
-            <LoadingComponent />
-          )}
-        </div>
-        <div className="flex flex-col ps-[40px] laptop:!ps-[0] border-l border-newColColor py-[40px] mobile:!pt-[24px] laptop:border-none laptop:pb-0">
-          <div className="top-[20px] sticky">
-            <div className="hidden laptop:block">
-              <JoinOver />
-            </div>
-            <div className="flex mb-[24px] mobile:flex-col">
+      <div className="flex-1 flex flex-col items-center px-[80px] laptop:px-[32px] mobile:!px-[16px] py-[40px]">
+        <div className="w-full max-w-[760px] flex flex-col gap-[40px]">
+          <JoinOver />
+
+          {/*
+            Single, always-stacked column instead of the old side-by-side
+            layout: that layout had a fixed-width pricing panel next to a
+            flex-grow intro column, which meant at common laptop widths
+            the two ended up nearly the same width and read as a broken
+            50/50 split - a mismatch this always-centered column can't
+            reproduce, since there's only one column at any width. The
+            subscribe/checkout section is now the last thing inside this
+            card, directly below Features, so the action always sits at
+            the bottom of the plan details rather than off to the side.
+          */}
+          <div className="flex flex-col gap-[32px] p-[32px] laptop:p-[24px] mobile:!p-[16px] rounded-[20px] border-[1.5px] border-newColColor">
+            <div className="flex mb-[8px] mobile:flex-col gap-[16px]">
               <div className="flex-1 text-[24px] font-[700]">
                 {t('billing_choose_plan', 'Choose a Plan')}
               </div>
@@ -335,14 +302,14 @@ export const FirstBillingComponent = () => {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-[8px] mobile:!grid-cols-2 laptop:grid-cols-4">
+            <div className="grid grid-cols-2 mobile:grid-cols-1 gap-[8px]">
               {price.map(
                 ([key, value]) => (
                   <div
                     onClick={() => setTier(key)}
                     key={key}
                     className={clsx(
-                      'cursor-pointer select-none w-[266px] h-[138px] laptop:w-full laptop:h-[124px] p-[24px] laptop:p-[15px] rounded-[20px] flex flex-col',
+                      'cursor-pointer select-none w-full h-[138px] mobile:h-auto p-[24px] mobile:p-[16px] rounded-[20px] flex flex-col',
                       key === tier
                         ? 'border-[1.5px] border-[#618DFF]'
                         : 'border-[1.5px] border-newColColor'
@@ -369,16 +336,58 @@ export const FirstBillingComponent = () => {
                 []
               )}
             </div>
-            <div className="flex flex-col mt-[54px] gap-[24px] laptop:mt-[40px]">
+            <div className="flex flex-col gap-[24px]">
               <div className="text-[24px] font-[700]">
                 {t('billing_features', 'Features')}
               </div>
               <BillingFeatures tier={tier} />
             </div>
-            <div className="flex flex-col mobile:hidden laptop:hidden">
-              {/*<div>asd</div>*/}
-              <FAQComponent />
+
+            {/* Subscribe/checkout action - always last, at the bottom of the plan card */}
+            <div className="pt-[8px] border-t border-newColColor">
+              {data?.blocked ? (
+                <div className="mt-[24px] p-[24px] rounded-[20px] border-[1.5px] border-newColColor text-[16px] font-[500]">
+                  {t(
+                    'billing_other_account_subscribed',
+                    'Another account with this email already has an active subscription. Please log off and sign in to that account to manage your subscription.'
+                  )}
+                </div>
+              ) : isRazorpay ? (
+                <div className="mt-[24px] p-[24px] rounded-[20px] border-[1.5px] border-newColColor flex flex-col gap-[16px]">
+                  <div className="text-[16px] font-[500]">
+                    {t(
+                      'billing_razorpay_summary',
+                      `You're subscribing to the ${capitalize(tier)} plan, billed ${
+                        period === 'MONTHLY' ? 'monthly' : 'yearly'
+                      } in INR via RazorPay.`
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={razorpayLoading}
+                    onClick={subscribeWithRazorpay}
+                    className="h-[48px] px-[24px] rounded-[12px] bg-boxFocused text-textItemFocused font-[600] disabled:opacity-60"
+                  >
+                    {razorpayLoading
+                      ? t('billing_loading', 'Loading...')
+                      : t('billing_subscribe_with_razorpay', 'Subscribe with RazorPay')}
+                  </button>
+                </div>
+              ) : !isLoading && data && stripe ? (
+                <EmbeddedBilling
+                  stripe={stripe}
+                  secret={data.client_secret}
+                  showCoupon={period === 'MONTHLY'}
+                  autoApplyCoupon={data.auto_apply_coupon}
+                />
+              ) : (
+                <LoadingComponent />
+              )}
             </div>
+          </div>
+
+          <div className="mobile:hidden">
+            <FAQComponent />
           </div>
         </div>
       </div>
