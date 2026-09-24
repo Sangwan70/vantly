@@ -169,8 +169,21 @@ export class SkillpediaProvider
     // side. Mirrors WordpressProvider's own image-then-post two-step,
     // just with a multipart form instead of a raw-binary body, since
     // that's what the Laravel endpoint expects.
+    //
+    // Two different callers hand us an image two different ways: the
+    // in-app editor sets `settings.main_image` (the MediaComponent field
+    // registered in skillpedia.provider.tsx), while blocks that go
+    // through the generic Vantly post API (e.g. AutoGPT's
+    // VantlyPostToSkillPediaBlock, which uploads to Vantly's media
+    // library and passes it as the post's `image` array - see
+    // blocks/vantly/_api.py's create_post()) land in `postDetails[0].media`
+    // instead, the same generic field Dribbble/Pinterest already read.
+    // Prefer the explicit editor selection, fall back to the first
+    // generically-attached media item.
     let featureImageId: number | undefined;
-    const imagePath = postDetails?.[0]?.settings?.main_image?.path;
+    const imagePath =
+      postDetails?.[0]?.settings?.main_image?.path ||
+      postDetails?.[0]?.media?.[0]?.path;
     if (imagePath) {
       try {
         const blob = await this.fetch(imagePath).then((r) => r.blob());
