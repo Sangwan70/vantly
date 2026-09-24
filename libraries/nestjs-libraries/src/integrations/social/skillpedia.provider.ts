@@ -140,6 +140,15 @@ export class SkillpediaProvider
       return 'theSkillPedia did not recognize this API key.';
     }
 
+    // Vantly's UI shows `name` (not `username`) next to a connected
+    // account's avatar - and only that, since it's the only field most of
+    // the picker surfaces. If it were just the theSkillPedia display name,
+    // two different theSkillPedia accounts with similar names (or a Vantly
+    // login email that doesn't match the theSkillPedia account's email -
+    // the two are unrelated logins on separate systems, by design) would
+    // be indistinguishable in the picker. Folding the email and account id
+    // into `name` makes it obvious which theSkillPedia account got linked
+    // without having to open the integration and re-check.
     return {
       refreshToken: '',
       // Key secrets are rotated on theSkillPedia's side, not by this app -
@@ -148,7 +157,9 @@ export class SkillpediaProvider
       expiresIn: dayjs().add(100, 'years').unix() - dayjs().unix(),
       accessToken: params.code,
       id: creds.domain + '_' + user.id,
-      name: user.name,
+      name: user.email
+        ? `${user.name} (${user.email}) #${user.id}`
+        : `${user.name} #${user.id}`,
       picture: '',
       username: user.email || user.name,
     };
