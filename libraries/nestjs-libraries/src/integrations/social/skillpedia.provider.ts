@@ -162,6 +162,48 @@ export class SkillpediaProvider
   ): Promise<PostResponse[]> {
     const creds = decodeCredentials(accessToken);
 
+    // Feature image: theSkillPedia's API is a two-step upload (POST
+    // /api/v1/media -> Media id, then that id as `feature_image` on the
+    // post itself) rather than accepting a raw file directly on the post
+    // endpoint - see MediaService/MediaController on the theSkillPedia
+    // side. Mirrors WordpressProvider's own image-then-post two-step,
+    // just with a multipart form instead of a raw-binary body, since
+    // that's what the Laravel endpoint expects.
+    let featureImageId: number | undefined;
+    const imagePath = postDetails?.[0]?.settings?.main_image?.path;
+    if (imagePath) {
+      try {
+        const blob = await this.fetch(imagePath).then((r) => r.blob());
+        const filename = imagePath.split('/').pop()?.split('?')[0] || 'image';
+
+        const form = new FormData();
+        form.append('file', blob, filename);
+
+        const mediaResponse = await (
+          await this.fetch(`${creds.domain}/api/v1/media`, {
+            method: 'POST',
+            headers: {
+              Authorization: authHeader(creds),
+              Accept: 'application/json',
+            },
+            body: form,
+          })
+        ).json();
+
+        if (mediaResponse?.success && mediaResponse?.data?.id) {
+          featureImageId = mediaResponse.data.id;
+        } else {
+          console.log('theSkillPedia media upload failed', mediaResponse);
+        }
+      } catch (err) {
+        // A failed image upload shouldn't block publishing the post text -
+        // same tradeoff WordpressProvider makes (no try/catch there either
+        // stops the post, a bad media response just leaves featured_media
+        // unset).
+        console.log('theSkillPedia media upload error', err);
+      }
+    }
+
     const submit = await (
       await this.fetch(`${creds.domain}/api/v1/posts`, {
         method: 'POST',
@@ -172,6 +214,7 @@ export class SkillpediaProvider
         body: JSON.stringify({
           title: postDetails?.[0]?.settings?.title,
           post_content: postDetails?.[0]?.message,
+          ...(featureImageId ? { feature_image: featureImageId } : {}),
         }),
       })
     ).json();
