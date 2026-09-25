@@ -71,7 +71,13 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
   // app (LINKEDIN_PAGE_CLIENT_ID/SECRET) that has Community Management API
   // as its only product. Do not add the org scopes back here - requesting a
   // scope the app isn't provisioned for breaks the personal OAuth flow.
-  scopes = ['openid', 'profile', 'w_member_social', 'r_basicprofile'];
+  // No 'r_basicprofile' - this app only has "Sign In with LinkedIn using
+  // OpenID Connect" added, not the older "Sign In with LinkedIn" product
+  // that grants r_basicprofile, so requesting it gets the whole authorize
+  // request rejected. It was only ever used for the vanity-URL username
+  // via /v2/me, which openid/profile's /v2/userinfo doesn't provide - see
+  // authenticate()/refreshToken().
+  scopes = ['openid', 'profile', 'w_member_social'];
   override maxConcurrentJob = 2;
   refreshWait = true;
   editor = 'normal' as const;
@@ -147,14 +153,10 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
       })
     ).json();
 
-    const { vanityName } = await (
-      await fetch('https://api.linkedin.com/v2/me', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
-
+    // No r_basicprofile scope on this app (see the comment on `scopes`
+    // above), so no /v2/me call for the vanity-URL username - id/name/
+    // picture all come from the OIDC /v2/userinfo endpoint instead, and
+    // the member id doubles as the username.
     const {
       name,
       sub: id,
@@ -174,7 +176,7 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
       expiresIn: expires_in,
       name,
       picture: picture || '',
-      username: vanityName,
+      username: id,
     };
   }
 
@@ -227,20 +229,16 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
 
     this.checkScopes(this.scopes, scope);
 
+    // No r_basicprofile scope on this app (see the comment on `scopes`
+    // above), so no /v2/me call for the vanity-URL username - id/name/
+    // picture all come from the OIDC /v2/userinfo endpoint instead, and
+    // the member id doubles as the username.
     const {
       name,
       sub: id,
       picture,
     } = await (
       await fetch('https://api.linkedin.com/v2/userinfo', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
-
-    const { vanityName } = await (
-      await fetch('https://api.linkedin.com/v2/me', {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
@@ -254,7 +252,7 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
       expiresIn,
       name,
       picture,
-      username: vanityName,
+      username: id,
     };
   }
 
