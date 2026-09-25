@@ -25,9 +25,12 @@ export class LinkedinPageProvider
   override isBetweenSteps = true;
   override refreshWait = true;
   override maxConcurrentJob = 2; // LinkedIn Page has professional posting limits
+  // No 'openid'/'profile' here - LinkedIn won't let an app have "Sign In
+  // with LinkedIn using OpenID Connect" (which grants those) alongside
+  // Community Management API (needed for the org scopes below) on the
+  // same app. Identity (name/picture/id) comes from /v2/me via
+  // r_basicprofile instead - see authenticate()/refreshToken().
   override scopes = [
-    'openid',
-    'profile',
     'w_member_social',
     'r_basicprofile',
     'rw_organization_admin',
@@ -63,25 +66,27 @@ export class LinkedinPageProvider
       })
     ).json();
 
-    const { vanityName } = await (
-      await fetch('https://api.linkedin.com/v2/me', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
+    // No openid/profile scope on this app (see the comment on `scopes`
+    // above), so identity comes from /v2/me (r_basicprofile) instead of
+    // the OIDC /v2/userinfo endpoint.
+    const { id, localizedFirstName, localizedLastName, vanityName, profilePicture } =
+      await (
+        await fetch(
+          'https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName,vanityName,profilePicture(displayImage~:playableStreams))',
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }
+        )
+      ).json();
 
-    const {
-      name,
-      sub: id,
-      picture,
-    } = await (
-      await fetch('https://api.linkedin.com/v2/userinfo', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
+    const name = [localizedFirstName, localizedLastName]
+      .filter(Boolean)
+      .join(' ');
+    const picture =
+      profilePicture?.['displayImage~']?.elements?.[0]?.identifiers?.[0]
+        ?.identifier || '';
 
     return {
       id,
@@ -243,28 +248,30 @@ export class LinkedinPageProvider
 
     this.checkScopes(this.scopes, scope);
 
-    const {
-      name,
-      sub: id,
-      picture,
-    } = await (
-      await fetch('https://api.linkedin.com/v2/userinfo', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
+    // No openid/profile scope on this app (see the comment on `scopes`
+    // above), so identity comes from /v2/me (r_basicprofile) instead of
+    // the OIDC /v2/userinfo endpoint.
+    const { id, localizedFirstName, localizedLastName, vanityName, profilePicture } =
+      await (
+        await fetch(
+          'https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName,vanityName,profilePicture(displayImage~:playableStreams))',
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }
+        )
+      ).json();
 
-    const { vanityName } = await (
-      await fetch('https://api.linkedin.com/v2/me', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
+    const name = [localizedFirstName, localizedLastName]
+      .filter(Boolean)
+      .join(' ');
+    const picture =
+      profilePicture?.['displayImage~']?.elements?.[0]?.identifiers?.[0]
+        ?.identifier || '';
 
     return {
-      id: id,
+      id,
       accessToken,
       refreshToken,
       expiresIn,
