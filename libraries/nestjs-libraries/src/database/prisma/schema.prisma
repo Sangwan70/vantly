@@ -53,6 +53,7 @@ model Organization {
   webhooks            Webhooks[]
   oauthApp            OAuthApp[]
   oauthAuthorizations OAuthAuthorization[]
+  promoteCompetitors  PromoteCompetitor[]
 
   @@index([apiKey])
   @@index([streakSince])
@@ -352,6 +353,7 @@ model Integration {
   orderItems            OrderItems[]
   plugs                 Plugs[]
   posts                 Post[]
+  promoteCompetitors    PromoteCompetitor[]
 
   @@unique([organizationId, internalId])
   @@index([rootInternalId])
@@ -1277,4 +1279,55 @@ model EmailSuppression {
   createdAt DateTime @default(now())
 
   @@index([email])
+}
+
+// Promote -> Competitors. A public Instagram Business/Creator account an org
+// tracks against one of its own connected Instagram accounts (integration).
+// Data comes from the official Graph API Business Discovery endpoint only.
+model PromoteCompetitor {
+  id                String                      @id @default(uuid())
+  organizationId    String
+  integrationId     String
+  username          String
+  igUserId          String?
+  name              String?
+  profilePictureUrl String?
+  biography         String?
+  followersCount    Int?
+  followsCount      Int?
+  mediaCount        Int?
+  // Last fetched recent posts (trimmed): used for "top posts" and the
+  // engagement averages without another API call per page view.
+  recentMedia       Json?
+  lastSyncedAt      DateTime?
+  lastError         String?
+  deletedAt         DateTime?
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+  organization      Organization                @relation(fields: [organizationId], references: [id])
+  integration       Integration                 @relation(fields: [integrationId], references: [id])
+  snapshots         PromoteCompetitorSnapshot[]
+
+  @@unique([integrationId, username])
+  @@index([organizationId])
+  @@index([integrationId])
+  @@index([deletedAt])
+}
+
+// One row per competitor per day (UTC), written by the daily sync workflow.
+model PromoteCompetitorSnapshot {
+  id             String            @id @default(uuid())
+  competitorId   String
+  date           DateTime
+  followersCount Int?
+  followsCount   Int?
+  mediaCount     Int?
+  avgLikes       Float?
+  avgComments    Float?
+  postsLast30d   Int?
+  createdAt      DateTime          @default(now())
+  competitor     PromoteCompetitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@unique([competitorId, date])
+  @@index([competitorId])
 }

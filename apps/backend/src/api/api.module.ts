@@ -22,6 +22,7 @@ import { OpenaiService } from '@gitroom/nestjs-libraries/openai/openai.service';
 import { ExtractContentService } from '@gitroom/nestjs-libraries/openai/extract.content.service';
 import { CodesService } from '@gitroom/nestjs-libraries/services/codes.service';
 import { CopilotController } from '@gitroom/backend/api/routes/copilot.controller';
+import { PromoteController } from '@gitroom/backend/api/routes/promote.controller';
 import { YoutubeOptimizerController } from '@gitroom/backend/api/routes/youtube-optimizer.controller';
 import { PublicController } from '@gitroom/backend/api/routes/public.controller';
 import { RootController } from '@gitroom/backend/api/routes/root.controller';
@@ -61,6 +62,7 @@ const authenticatedController = [
   NotificationsController,
   CopilotController,
   YoutubeOptimizerController,
+  PromoteController,
   WebhookController,
   SignatureController,
   AutopostController,

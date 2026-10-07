@@ -4,6 +4,8 @@ import {
   PendingCheckResponse,
   PostDetails,
   PostResponse,
+  PromoteMedia,
+  PromoteProfile,
   SocialProvider,
 } from '@gitroom/nestjs-libraries/integrations/social/social.integrations.interface';
 import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
@@ -1123,6 +1125,111 @@ export class InstagramProvider
     );
 
     return analytics;
+  }
+
+  private mapPromoteMedia(m: any): PromoteMedia {
+    return {
+      id: m.id,
+      caption: m.caption,
+      mediaType: m.media_type,
+      permalink: m.permalink,
+      thumbnailUrl: m.thumbnail_url || m.media_url,
+      timestamp: m.timestamp,
+      likeCount: typeof m.like_count === 'number' ? m.like_count : undefined,
+      commentsCount:
+        typeof m.comments_count === 'number' ? m.comments_count : undefined,
+    };
+  }
+
+  private static readonly PROMOTE_MEDIA_FIELDS =
+    'id,caption,media_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count';
+
+  // Promote: official Business Discovery. Reads PUBLIC data of another
+  // Instagram Business/Creator account through our own connected account.
+  // Personal accounts and private data are not available (Graph API 110/24).
+  async businessDiscovery(
+    accessToken: string,
+    internalId: string,
+    username: string
+  ): Promise<PromoteProfile> {
+    const [pageToken] = accessToken.split('___');
+    const clean = username.replace(/^@/, '').trim();
+    const fields =
+      `business_discovery.username(${clean}){id,username,name,biography,profile_picture_url,followers_count,follows_count,media_count,` +
+      `media.limit(25){${InstagramProvider.PROMOTE_MEDIA_FIELDS}}}`;
+
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/${internalId}?fields=${encodeURIComponent(
+        fields
+      )}&access_token=${pageToken}`
+    );
+    const json = await res.json();
+
+    if (json?.error) {
+      const code = json.error.code;
+      if (code === 190 || code === 102) {
+        throw new Error('TOKEN_INVALID');
+      }
+      if (code === 110 || code === 24 || json.error.error_subcode === 2207013) {
+        throw new Error(
+          'NOT_FOUND: that account does not exist or is not an Instagram Business/Creator account'
+        );
+      }
+      if (code === 4 || code === 17 || code === 32 || code === 613) {
+        throw new Error('RATE_LIMITED');
+      }
+      throw new Error(json.error.message || 'Instagram request failed');
+    }
+
+    const d = json?.business_discovery;
+    if (!d) {
+      throw new Error('NOT_FOUND: no data returned');
+    }
+
+    return {
+      igUserId: d.id,
+      username: d.username,
+      name: d.name,
+      biography: d.biography,
+      profilePictureUrl: d.profile_picture_url,
+      followersCount: d.followers_count,
+      followsCount: d.follows_count,
+      mediaCount: d.media_count,
+      media: (d.media?.data || []).map((m: any) => this.mapPromoteMedia(m)),
+    };
+  }
+
+  // Promote: the connected account's own numbers, shaped like a competitor
+  // so the UI can show "you vs them" with one comparison component.
+  async ownProfile(
+    accessToken: string,
+    internalId: string
+  ): Promise<PromoteProfile> {
+    const [pageToken] = accessToken.split('___');
+    const fields = `username,name,biography,profile_picture_url,followers_count,follows_count,media_count,media.limit(25){${InstagramProvider.PROMOTE_MEDIA_FIELDS}}`;
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/${internalId}?fields=${encodeURIComponent(
+        fields
+      )}&access_token=${pageToken}`
+    );
+    const d = await res.json();
+    if (d?.error) {
+      if (d.error.code === 190 || d.error.code === 102) {
+        throw new Error('TOKEN_INVALID');
+      }
+      throw new Error(d.error.message || 'Instagram request failed');
+    }
+    return {
+      igUserId: internalId,
+      username: d.username,
+      name: d.name,
+      biography: d.biography,
+      profilePictureUrl: d.profile_picture_url,
+      followersCount: d.followers_count,
+      followsCount: d.follows_count,
+      mediaCount: d.media_count,
+      media: (d.media?.data || []).map((m: any) => this.mapPromoteMedia(m)),
+    };
   }
 
   music(accessToken: string, data: { q: string }) {

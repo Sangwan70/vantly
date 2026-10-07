@@ -101,6 +101,27 @@ export const useMenuItem = () => {
       path: '/analytics',
     },
     {
+      name: t('promote', 'Promote'),
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 20 20"
+          fill="none"
+        >
+          <path
+            d="M3 11.5V8.5C3 8.22 3.22 8 3.5 8H6L12.5 4V16L6 12H3.5C3.22 12 3 11.78 3 11.5ZM6 12L7 16.5H9L8.2 12.7M15.5 7.5C16.4 8.2 17 9.05 17 10C17 10.95 16.4 11.8 15.5 12.5"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ),
+      path: '/promote',
+    },
+    {
       name: t('feed', 'Feed'),
       icon: (
         <svg

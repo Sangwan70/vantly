@@ -208,6 +208,31 @@ export type ChannelStats = {
 // against real competing content (feature inventory item 6, "competitive
 // benchmarking"). Deliberately thin - just enough to show "similar videos
 // are getting N views with titles like this" alongside a suggestion.
+export type PromoteMedia = {
+  id: string;
+  caption?: string;
+  mediaType?: string;
+  permalink?: string;
+  thumbnailUrl?: string;
+  timestamp?: string;
+  likeCount?: number;
+  commentsCount?: number;
+};
+
+// Promote: public profile data for an Instagram Business/Creator account,
+// either a competitor (Business Discovery) or the connected account itself.
+export type PromoteProfile = {
+  igUserId?: string;
+  username: string;
+  name?: string;
+  biography?: string;
+  profilePictureUrl?: string;
+  followersCount?: number;
+  followsCount?: number;
+  mediaCount?: number;
+  media: PromoteMedia[];
+};
+
 export type SimilarVideo = {
   title: string;
   channelTitle: string;
@@ -280,6 +305,14 @@ export interface SocialProvider
   // any provider-specific branching in generic controller/service code -
   // callers always go through IntegrationManager.getSocialIntegration() and
   // check `if (provider.listVideos)` rather than importing YoutubeProvider.
+  // Promote: optional so only providers whose API supports it (Instagram via
+  // Facebook Login) expose competitor research; callers check for presence.
+  businessDiscovery?(
+    accessToken: string,
+    internalId: string,
+    username: string
+  ): Promise<PromoteProfile>;
+  ownProfile?(accessToken: string, internalId: string): Promise<PromoteProfile>;
   listVideos?(
     accessToken: string,
     channelId: string,
