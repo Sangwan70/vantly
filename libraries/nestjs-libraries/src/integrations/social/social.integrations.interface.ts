@@ -233,6 +233,31 @@ export type PromoteProfile = {
   media: PromoteMedia[];
 };
 
+export type PromoteCommentReply = {
+  id: string;
+  text: string;
+  username: string;
+  timestamp?: string;
+};
+
+export type PromoteComment = {
+  id: string;
+  text: string;
+  username: string;
+  timestamp?: string;
+  likeCount: number;
+  replies: PromoteCommentReply[];
+  // True when the connected account wrote this comment itself.
+  own: boolean;
+  // True when the connected account already replied to it.
+  replied: boolean;
+};
+
+export type PromoteCommentPost = {
+  media: PromoteMedia;
+  comments: PromoteComment[];
+};
+
 export type PromoteHashtagData = {
   igHashtagId: string;
   topMedia: PromoteMedia[];
@@ -319,6 +344,17 @@ export interface SocialProvider
     username: string
   ): Promise<PromoteProfile>;
   ownProfile?(accessToken: string, internalId: string): Promise<PromoteProfile>;
+  listComments?(
+    accessToken: string,
+    internalId: string,
+    ownUsername: string | null,
+    maxPosts?: number
+  ): Promise<PromoteCommentPost[]>;
+  replyToComment?(
+    accessToken: string,
+    commentId: string,
+    message: string
+  ): Promise<{ id: string }>;
   ownMedia?(
     accessToken: string,
     internalId: string,

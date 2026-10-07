@@ -3,16 +3,18 @@
 import React, { FC, useEffect, useMemo, useState } from 'react';
 import { LoadingComponent } from '@gitroom/frontend/components/layout/loading';
 import { Hashtags } from '@gitroom/frontend/components/promote/hashtags.component';
+import { Comments } from '@gitroom/frontend/components/promote/comments.component';
 import { Insights } from '@gitroom/frontend/components/promote/insights.component';
 import { Competitors } from '@gitroom/frontend/components/promote/competitors.component';
 import { usePromoteAccounts } from '@gitroom/frontend/components/promote/promote.hooks';
 
-type TabKey = 'competitors' | 'hashtags' | 'insights';
+type TabKey = 'competitors' | 'hashtags' | 'insights' | 'comments';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'competitors', label: 'Competitors' },
   { key: 'hashtags', label: 'Hashtags' },
   { key: 'insights', label: 'Best times' },
+  { key: 'comments', label: 'Comments' },
 ];
 
 const selectClass =
@@ -108,6 +110,7 @@ export const Promote: FC = () => {
           {tab === 'competitors' && <Competitors key={accountId} integrationId={accountId} />}
           {tab === 'hashtags' && <Hashtags key={accountId} integrationId={accountId} />}
           {tab === 'insights' && <Insights key={accountId} integrationId={accountId} />}
+          {tab === 'comments' && <Comments key={accountId} integrationId={accountId} />}
         </>
       )}
     </div>

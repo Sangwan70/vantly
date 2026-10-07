@@ -105,8 +105,49 @@ const InstagramHashtagIdeasSchema = z.object({
 });
 export type InstagramHashtagIdeas = z.infer<typeof InstagramHashtagIdeasSchema>;
 
+const InstagramCommentReplySchema = z.object({
+  reply: z.string(),
+});
+export type InstagramCommentReplyDraft = z.infer<
+  typeof InstagramCommentReplySchema
+>;
+
 @Injectable()
 export class OpenaiService {
+  // Promote: a DRAFT reply to a comment on the account's own post. Always
+  // shown to a person for editing and approval, never sent automatically.
+  async generateInstagramCommentReply(
+    comment: string,
+    postCaption: string,
+    tone: 'friendly' | 'professional' | 'playful'
+  ): Promise<InstagramCommentReplyDraft> {
+    const parsed = (
+      await openai.chat.completions.parse({
+        model: 'gpt-4.1',
+        messages: [
+          {
+            role: 'system',
+            content: `You draft replies for an Instagram account owner answering a comment on their own post. Tone: ${tone}. Keep it to 1-2 short sentences, specific to what the commenter said, and sound like a real person, not a brand bot. Do not use hashtags, links, or promotional language. Do not make promises, share prices, or give medical/legal/financial claims you cannot know. If the comment is only an emoji or praise, a brief warm thanks is enough. If it asks something you cannot answer from the post caption, reply in a way that invites them to message you, without inventing facts. Use emojis only if the commenter did.`,
+          },
+          {
+            role: 'user',
+            content: `Post caption: ${postCaption || '(none)'}\n\nComment: ${comment}`,
+          },
+        ],
+        response_format: zodResponseFormat(
+          InstagramCommentReplySchema,
+          'commentReply'
+        ),
+      })
+    ).choices[0].message.parsed;
+
+    if (!parsed) {
+      throw new Error('The AI did not return a valid response, please try again');
+    }
+
+    return parsed;
+  }
+
   // Promote: seed ideas for hashtag research. These are candidates to verify
   // with real Hashtag Search data, not performance claims.
   async generateInstagramHashtagIdeas(

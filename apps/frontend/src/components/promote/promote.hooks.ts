@@ -219,3 +219,38 @@ export const usePromoteInsights = (integrationId: string) => {
     { revalidateOnFocus: false, shouldRetryOnError: false }
   );
 };
+
+export interface InboxComment {
+  id: string;
+  text: string;
+  username: string;
+  timestamp?: string;
+  likeCount: number;
+  replies: { id: string; text: string; username: string; timestamp?: string }[];
+  own: boolean;
+  replied: boolean;
+  needsReply: boolean;
+}
+
+export interface InboxPost {
+  media: PromotePost;
+  comments: InboxComment[];
+}
+
+export interface CommentInbox {
+  unanswered: number;
+  posts: InboxPost[];
+}
+
+export const usePromoteComments = (integrationId: string) => {
+  const fetch = useFetch();
+  return useSWR<CommentInbox>(
+    `promote-comments-${integrationId}`,
+    async () => {
+      const res = await fetch(`/promote/comments/${integrationId}`);
+      if (!res.ok) throw new Error(await errorMessage(res, 'Failed to load comments'));
+      return res.json();
+    },
+    { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
+};

@@ -4,6 +4,7 @@ import {
   PendingCheckResponse,
   PostDetails,
   PostResponse,
+  PromoteCommentPost,
   PromoteHashtagData,
   PromoteMedia,
   PromoteProfile,
@@ -1329,6 +1330,119 @@ export class InstagramProvider
       url = json?.paging?.next;
     }
     return out.slice(0, max);
+  }
+
+  // Promote: comment inbox. Reads comments on the account's most recent
+  // posts (needs instagram_manage_comments, already in our scopes).
+  async listComments(
+    accessToken: string,
+    internalId: string,
+    ownUsername: string | null,
+    maxPosts = 10
+  ): Promise<PromoteCommentPost[]> {
+    const [pageToken] = accessToken.split('___');
+    const check = (json: any) => {
+      if (json?.error) {
+        if (json.error.code === 190 || json.error.code === 102) {
+          throw new Error('TOKEN_INVALID');
+        }
+        if (json.error.code === 10 || json.error.code === 200) {
+          throw new Error('NO_COMMENT_PERMISSION');
+        }
+        throw new Error(json.error.message || 'Instagram request failed');
+      }
+      return json;
+    };
+
+    let own = (ownUsername || '').toLowerCase();
+    if (!own) {
+      const me = check(
+        await (
+          await fetch(
+            `https://graph.facebook.com/v21.0/${internalId}?fields=username&access_token=${pageToken}`
+          )
+        ).json()
+      );
+      own = String(me?.username || '').toLowerCase();
+    }
+
+    const mediaJson = check(
+      await (
+        await fetch(
+          `https://graph.facebook.com/v21.0/${internalId}/media?fields=id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,comments_count,like_count&limit=${maxPosts}&access_token=${pageToken}`
+        )
+      ).json()
+    );
+
+    const posts: any[] = (mediaJson?.data || []).filter(
+      (m: any) => (m.comments_count || 0) > 0
+    );
+
+    return Promise.all(
+      posts.map(async (m) => {
+        const json = check(
+          await (
+            await fetch(
+              `https://graph.facebook.com/v21.0/${m.id}/comments?fields=${encodeURIComponent(
+                'id,text,username,timestamp,like_count,replies.limit(25){id,text,username,timestamp}'
+              )}&limit=50&access_token=${pageToken}`
+            )
+          ).json()
+        );
+        return {
+          media: this.mapPromoteMedia(m),
+          comments: (json?.data || []).map((c: any) => {
+            const replies = (c.replies?.data || []).map((r: any) => ({
+              id: r.id,
+              text: r.text,
+              username: r.username,
+              timestamp: r.timestamp,
+            }));
+            return {
+              id: c.id,
+              text: c.text || '',
+              username: c.username || '',
+              timestamp: c.timestamp,
+              likeCount: c.like_count || 0,
+              replies,
+              own: String(c.username || '').toLowerCase() === own,
+              replied: replies.some(
+                (r: any) => String(r.username || '').toLowerCase() === own
+              ),
+            };
+          }),
+        };
+      })
+    );
+  }
+
+  // Promote: posts ONE reply to ONE comment on the account's own post. Always
+  // triggered by a person clicking send, never automatically.
+  async replyToComment(
+    accessToken: string,
+    commentId: string,
+    message: string
+  ): Promise<{ id: string }> {
+    const [pageToken] = accessToken.split('___');
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/${commentId}/replies?access_token=${pageToken}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      }
+    );
+    const json = await res.json();
+    if (json?.error) {
+      if (json.error.code === 190 || json.error.code === 102) {
+        throw new Error('TOKEN_INVALID');
+      }
+      if (json.error.code === 10 || json.error.code === 200) {
+        throw new Error('NO_COMMENT_PERMISSION');
+      }
+      throw new Error(json.error.message || 'Instagram request failed');
+    }
+    return { id: json.id };
   }
 
   music(accessToken: string, data: { q: string }) {
