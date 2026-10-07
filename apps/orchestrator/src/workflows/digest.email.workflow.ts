@@ -53,11 +53,14 @@ export async function digestEmailWorkflow({
 
       if (toSend.length === 0) continue;
 
+      // Greet by first name when we have one, otherwise a generic greeting.
+      const greeting = user.user.name?.trim() || 'Hi There!';
+
       await sendEmailAsync(
         user.user.email,
         toSend.length === 1
           ? toSend[0].title
-          : `[Postiz] Your latest notifications`,
+          : `${greeting} Your latest notifications`,
         toSend.map((p) => p.message).join('<br/>'),
         'bottom'
       );

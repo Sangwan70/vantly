@@ -392,6 +392,7 @@ export class OrganizationRepository {
               select: {
                 email: true,
                 id: true,
+                name: true,
                 sendSuccessEmails: true,
                 sendFailureEmails: true,
                 sendStreakEmails: true,
