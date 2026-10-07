@@ -51,7 +51,7 @@ export class PromoteCommentsService {
       org,
       integrationId
     );
-    if (!provider.listComments || !provider.replyToComment) {
+    if (!provider.promoteListComments || !provider.promoteReplyToComment) {
       throw new HttpException('Comment tools are not available.', 400);
     }
 
@@ -66,7 +66,7 @@ export class PromoteCommentsService {
 
     let posts: PromoteCommentPost[];
     try {
-      posts = await provider.listComments(
+      posts = await provider.promoteListComments(
         integration.token,
         integration.internalId,
         integration.profile || null,
@@ -199,7 +199,7 @@ export class PromoteCommentsService {
     }
 
     try {
-      const res = await provider.replyToComment!(integration.token, commentId, text);
+      const res = await provider.promoteReplyToComment!(integration.token, commentId, text);
       await ioRedis.del(this.cacheKey(integration.id));
       return { id: res.id };
     } catch (e) {

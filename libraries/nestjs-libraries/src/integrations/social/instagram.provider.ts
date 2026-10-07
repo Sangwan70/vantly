@@ -1334,7 +1334,7 @@ export class InstagramProvider
 
   // Promote: comment inbox. Reads comments on the account's most recent
   // posts (needs instagram_manage_comments, already in our scopes).
-  async listComments(
+  async promoteListComments(
     accessToken: string,
     internalId: string,
     ownUsername: string | null,
@@ -1418,7 +1418,7 @@ export class InstagramProvider
 
   // Promote: posts ONE reply to ONE comment on the account's own post. Always
   // triggered by a person clicking send, never automatically.
-  async replyToComment(
+  async promoteReplyToComment(
     accessToken: string,
     commentId: string,
     message: string

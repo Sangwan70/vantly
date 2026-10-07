@@ -344,13 +344,13 @@ export interface SocialProvider
     username: string
   ): Promise<PromoteProfile>;
   ownProfile?(accessToken: string, internalId: string): Promise<PromoteProfile>;
-  listComments?(
+  promoteListComments?(
     accessToken: string,
     internalId: string,
     ownUsername: string | null,
     maxPosts?: number
   ): Promise<PromoteCommentPost[]>;
-  replyToComment?(
+  promoteReplyToComment?(
     accessToken: string,
     commentId: string,
     message: string
