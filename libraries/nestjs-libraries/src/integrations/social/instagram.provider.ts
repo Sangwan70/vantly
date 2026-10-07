@@ -1299,6 +1299,38 @@ export class InstagramProvider
     return { igHashtagId, topMedia, recentMedia };
   }
 
+  // Promote: the connected account's own recent posts (newest first) with
+  // engagement, for best-time-to-post and cadence analysis.
+  async ownMedia(
+    accessToken: string,
+    internalId: string,
+    max = 100
+  ): Promise<PromoteMedia[]> {
+    const [pageToken] = accessToken.split('___');
+    const fields =
+      'id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count';
+    let url: string | undefined = `https://graph.facebook.com/v21.0/${internalId}/media?fields=${fields}&limit=50&access_token=${pageToken}`;
+    const out: PromoteMedia[] = [];
+    while (url && out.length < max) {
+      const json: any = await (await fetch(url)).json();
+      if (json?.error) {
+        if (json.error.code === 190 || json.error.code === 102) {
+          throw new Error('TOKEN_INVALID');
+        }
+        throw new Error(json.error.message || 'Instagram request failed');
+      }
+      for (const m of json?.data || []) {
+        const mapped = this.mapPromoteMedia(m);
+        if (m.media_product_type === 'REELS') {
+          mapped.mediaType = 'REELS';
+        }
+        out.push(mapped);
+      }
+      url = json?.paging?.next;
+    }
+    return out.slice(0, max);
+  }
+
   music(accessToken: string, data: { q: string }) {
     return this.fetch(
       `https://graph.facebook.com/v20.0/music/search?q=${encodeURIComponent(

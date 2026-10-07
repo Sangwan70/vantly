@@ -49,6 +49,7 @@ import { PromoteRepository } from '@gitroom/nestjs-libraries/database/prisma/pro
 import { PromoteService } from '@gitroom/nestjs-libraries/promote/promote.service';
 import { PromoteHashtagRepository } from '@gitroom/nestjs-libraries/database/prisma/promote/promote.hashtag.repository';
 import { PromoteHashtagService } from '@gitroom/nestjs-libraries/promote/promote.hashtag.service';
+import { PromoteInsightsService } from '@gitroom/nestjs-libraries/promote/promote.insights.service';
 import { YoutubeOptimizerService } from '@gitroom/nestjs-libraries/youtube-optimizer/youtube.optimizer.service';
 import { PaymentGatewaySettingsRepository } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.repository';
 import { PaymentGatewaySettingsService } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.service';
@@ -126,6 +127,7 @@ import { EmailSuppressionService } from '@gitroom/nestjs-libraries/database/pris
     PromoteService,
     PromoteHashtagRepository,
     PromoteHashtagService,
+    PromoteInsightsService,
     PaymentGatewaySettingsRepository,
     PaymentGatewaySettingsService,
     BlogRepository,

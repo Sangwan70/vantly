@@ -171,3 +171,51 @@ export const useHashtagSets = () => {
     { revalidateOnFocus: false, shouldRetryOnError: false }
   );
 };
+
+export interface InsightsResult {
+  sampleSize: number;
+  withEngagement: number;
+  enough: boolean;
+  from: string | null;
+  to: string | null;
+  avgEngagement: number | null;
+  heatmap: (number | null)[][];
+  counts: number[][];
+  bestHours: {
+    hourLocal: number;
+    hourUtc: number;
+    avgEngagement: number;
+    lift: number | null;
+    posts: number;
+  }[];
+  bestDays: {
+    day: number;
+    name: string;
+    avgEngagement: number;
+    lift: number | null;
+    posts: number;
+  }[];
+  formats: { type: string; posts: number; avgEngagement: number; lift: number | null }[];
+  cadence: {
+    weeks: { weekStart: string; posts: number; avgEngagement: number | null }[];
+    avgPerWeek: number;
+    longestGapDays: number;
+    competitorAvgPerWeek: number | null;
+    competitors: { username: string; perWeek: number }[];
+  };
+  notes: string[];
+}
+
+export const usePromoteInsights = (integrationId: string) => {
+  const fetch = useFetch();
+  return useSWR<InsightsResult>(
+    `promote-insights-${integrationId}`,
+    async () => {
+      const offset = -new Date().getTimezoneOffset();
+      const res = await fetch(`/promote/${integrationId}/insights?offset=${offset}`);
+      if (!res.ok) throw new Error(await errorMessage(res, 'Failed to load insights'));
+      return res.json();
+    },
+    { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
+};

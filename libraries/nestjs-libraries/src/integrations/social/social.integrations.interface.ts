@@ -319,6 +319,11 @@ export interface SocialProvider
     username: string
   ): Promise<PromoteProfile>;
   ownProfile?(accessToken: string, internalId: string): Promise<PromoteProfile>;
+  ownMedia?(
+    accessToken: string,
+    internalId: string,
+    max?: number
+  ): Promise<PromoteMedia[]>;
   hashtagSearch?(
     accessToken: string,
     internalId: string,
