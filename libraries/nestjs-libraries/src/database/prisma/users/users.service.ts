@@ -117,6 +117,72 @@ export class UsersService {
     return this._usersRepository.activateUser(id);
   }
 
+  adminListUsers(params: Parameters<UsersRepository['adminListUsers']>[0]) {
+    return this._usersRepository.adminListUsers(params);
+  }
+
+  adminGetUser(id: string) {
+    return this._usersRepository.adminGetUser(id);
+  }
+
+  adminUserBelongsToOrg(userId: string, organizationId: string) {
+    return this._usersRepository.adminUserBelongsToOrg(userId, organizationId);
+  }
+
+  // Returns a string error code instead of throwing so the controller can
+  // map it to a proper HTTP status.
+  async adminUpdateUser(
+    id: string,
+    body: {
+      name?: string;
+      lastName?: string;
+      email?: string;
+      sendSuccessEmails?: boolean;
+      sendFailureEmails?: boolean;
+      sendStreakEmails?: boolean;
+    }
+  ): Promise<'not_found' | 'email_taken' | 'ok'> {
+    const existing = await this._usersRepository.adminFindIdentity(id);
+    if (!existing) {
+      return 'not_found';
+    }
+
+    const data: Parameters<UsersRepository['adminUpdateUser']>[1] = {};
+
+    if (body.name !== undefined) {
+      data.name = body.name.trim() || null;
+    }
+    if (body.lastName !== undefined) {
+      data.lastName = body.lastName.trim() || null;
+    }
+    if (body.email !== undefined) {
+      const email = body.email.trim();
+      if (email.toLowerCase() !== existing.email.toLowerCase()) {
+        const clash = await this._usersRepository.adminEmailTaken(
+          email,
+          existing.providerName,
+          id
+        );
+        if (clash) {
+          return 'email_taken';
+        }
+      }
+      data.email = email;
+    }
+    if (body.sendSuccessEmails !== undefined) {
+      data.sendSuccessEmails = body.sendSuccessEmails;
+    }
+    if (body.sendFailureEmails !== undefined) {
+      data.sendFailureEmails = body.sendFailureEmails;
+    }
+    if (body.sendStreakEmails !== undefined) {
+      data.sendStreakEmails = body.sendStreakEmails;
+    }
+
+    await this._usersRepository.adminUpdateUser(id, data);
+    return 'ok';
+  }
+
   updatePassword(id: string, password: string) {
     return this._usersRepository.updatePassword(id, password);
   }

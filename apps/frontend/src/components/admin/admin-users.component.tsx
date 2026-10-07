@@ -9,6 +9,7 @@ import { useUser } from '@gitroom/frontend/components/layout/user.context';
 import { deleteDialog } from '@gitroom/react/helpers/delete.dialog';
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
 import { useToaster } from '@gitroom/react/toaster/toaster';
+import { AdminUsersGrid } from '@gitroom/frontend/components/admin/admin-users-grid.component';
 
 // Impersonate/Ban/Switch-user, moved here from the always-on top bar
 // (impersonate.tsx) now that Admin Panel -> Users is the dedicated home
@@ -444,37 +445,28 @@ export const AdminUsersComponent: FC = () => {
   }
 
   return (
-    <div className="flex flex-col gap-[16px] text-textColor max-w-[720px]">
+    <div className="flex flex-col gap-[16px] text-textColor">
       <div className="text-[20px] font-[600]">Users</div>
       <div className="text-[13px] opacity-70">
-        Impersonate, ban, or switch the login for any user account. These
-        used to live in a toolbar shown at the top of every page - they now
-        live here instead, alongside the rest of the Admin Panel.
+        Search, review, edit, ban, impersonate, and change the plan for any
+        user account.
       </div>
 
-      <div className="border border-newTableBorder rounded-[8px] p-[16px] bg-newBgColorInner flex flex-col gap-[10px]">
-        <div className="text-[15px] font-[600]">Impersonate a user</div>
-        <div className="text-[12px] opacity-60">
-          View the app as this user&apos;s organization. A bar at the top of
-          the page shows while impersonating, with a way to stop.
+      <AdminUsersGrid />
+
+      <details className="border border-newTableBorder rounded-[8px] p-[16px] bg-newBgColorInner">
+        <summary className="text-[15px] font-[600] cursor-pointer">
+          Advanced: switch user login
+        </summary>
+        <div className="flex flex-col gap-[10px] mt-[10px] max-w-[720px]">
+          <div className="text-[12px] opacity-60">
+            Permanently replaces the CURRENT admin login with another
+            user&apos;s. It only works while impersonating, so it can&apos;t be
+            a per-row action. Confirming shows the full warning.
+          </div>
+          <SwitchUser />
         </div>
-        <ImpersonateUserSearch />
-      </div>
-
-      <div className="border border-newTableBorder rounded-[8px] p-[16px] bg-newBgColorInner flex flex-col gap-[10px]">
-        <div className="text-[15px] font-[600]">Ban / unban a user</div>
-        <BanUser />
-      </div>
-
-      <div className="border border-newTableBorder rounded-[8px] p-[16px] bg-newBgColorInner flex flex-col gap-[10px]">
-        <div className="text-[15px] font-[600]">Switch user login</div>
-        <div className="text-[12px] opacity-60">
-          Permanently replaces the CURRENT admin login with another user&apos;s
-          - different from impersonate above. Confirming shows the full
-          warning.
-        </div>
-        <SwitchUser />
-      </div>
+      </details>
     </div>
   );
 };

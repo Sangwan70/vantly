@@ -182,6 +182,257 @@ export class UsersRepository {
     });
   }
 
+  // ---- Admin Panel -> Users grid -------------------------------------
+  // Shared by the list and detail endpoints so a row and its detail view
+  // can never disagree about what "current plan" means: a Subscription row
+  // with deletedAt set counts as FREE (mapped in adminMapUser below).
+  private readonly adminUserSelect = {
+    id: true,
+    name: true,
+    lastName: true,
+    email: true,
+    providerName: true,
+    activated: true,
+    isSuperAdmin: true,
+    createdAt: true,
+    lastOnline: true,
+    organizations: {
+      select: {
+        id: true,
+        role: true,
+        disabled: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            subscription: {
+              select: {
+                subscriptionTier: true,
+                period: true,
+                isLifetime: true,
+                cancelAt: true,
+                deletedAt: true,
+              },
+            },
+          },
+        },
+      },
+    },
+  } as const;
+
+  private adminMapUser(u: any) {
+    return {
+      id: u.id,
+      name: u.name,
+      lastName: u.lastName,
+      email: u.email,
+      providerName: u.providerName,
+      activated: u.activated,
+      isSuperAdmin: u.isSuperAdmin,
+      createdAt: u.createdAt,
+      lastOnline: u.lastOnline,
+      ip: u.ip,
+      agent: u.agent,
+      timezone: u.timezone,
+      sendSuccessEmails: u.sendSuccessEmails,
+      sendFailureEmails: u.sendFailureEmails,
+      sendStreakEmails: u.sendStreakEmails,
+      orgs: (u.organizations || []).map((uo: any) => {
+        const sub = uo.organization?.subscription;
+        const active = sub && !sub.deletedAt ? sub : null;
+        return {
+          userOrgId: uo.id,
+          orgId: uo.organization?.id,
+          orgName: uo.organization?.name,
+          role: uo.role,
+          disabled: uo.disabled,
+          tier: active?.subscriptionTier || 'FREE',
+          period: active?.period || null,
+          isLifetime: !!active?.isLifetime,
+          cancelAt: active?.cancelAt || null,
+          channels: (uo.organization?.Integration || []).map((i: any) => ({
+            id: i.id,
+            name: i.name,
+            providerIdentifier: i.providerIdentifier,
+            disabled: i.disabled,
+          })),
+        };
+      }),
+    };
+  }
+
+  async adminListUsers(params: {
+    search?: string;
+    page: number;
+    pageSize: number;
+    status: 'all' | 'active' | 'banned';
+    tier: string;
+    sort: string;
+    dir: 'asc' | 'desc';
+  }) {
+    const and: any[] = [];
+
+    if (params.search) {
+      const contains = { contains: params.search, mode: 'insensitive' as const };
+      and.push({
+        OR: [
+          { name: contains },
+          { lastName: contains },
+          { email: contains },
+          { id: { contains: params.search } },
+        ],
+      });
+    }
+
+    if (params.status === 'active') {
+      and.push({ activated: true });
+    } else if (params.status === 'banned') {
+      and.push({ activated: false });
+    }
+
+    if (params.tier === 'FREE') {
+      and.push({
+        NOT: {
+          organizations: {
+            some: {
+              organization: { subscription: { is: { deletedAt: null } } },
+            },
+          },
+        },
+      });
+    } else if (params.tier && params.tier !== 'ALL') {
+      and.push({
+        organizations: {
+          some: {
+            organization: {
+              subscription: {
+                is: { deletedAt: null, subscriptionTier: params.tier as any },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    const where = and.length ? { AND: and } : {};
+    const sortable = ['createdAt', 'lastOnline', 'name', 'email'];
+    const sortField = sortable.includes(params.sort) ? params.sort : 'lastOnline';
+
+    const [total, rows] = await Promise.all([
+      this._user.model.user.count({ where }),
+      this._user.model.user.findMany({
+        where,
+        select: this.adminUserSelect,
+        orderBy: { [sortField]: params.dir } as any,
+        skip: params.page * params.pageSize,
+        take: params.pageSize,
+      }),
+    ]);
+
+    return {
+      items: rows.map((r) => this.adminMapUser(r)),
+      total,
+      page: params.page,
+      pageSize: params.pageSize,
+      hasMore: (params.page + 1) * params.pageSize < total,
+    };
+  }
+
+  async adminGetUser(id: string) {
+    const row = await this._user.model.user.findUnique({
+      where: { id },
+      select: {
+        ...this.adminUserSelect,
+        ip: true,
+        agent: true,
+        timezone: true,
+        sendSuccessEmails: true,
+        sendFailureEmails: true,
+        sendStreakEmails: true,
+        organizations: {
+          select: {
+            id: true,
+            role: true,
+            disabled: true,
+            organization: {
+              select: {
+                id: true,
+                name: true,
+                subscription: {
+                  select: {
+                    subscriptionTier: true,
+                    period: true,
+                    isLifetime: true,
+                    cancelAt: true,
+                    deletedAt: true,
+                  },
+                },
+                Integration: {
+                  where: { deletedAt: null },
+                  select: {
+                    id: true,
+                    name: true,
+                    providerIdentifier: true,
+                    disabled: true,
+                  },
+                  take: 100,
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return row ? this.adminMapUser(row) : null;
+  }
+
+  adminFindIdentity(id: string) {
+    return this._user.model.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, providerName: true },
+    });
+  }
+
+  adminEmailTaken(email: string, providerName: Provider, exceptId: string) {
+    return this._user.model.user.findFirst({
+      where: {
+        email: { equals: email, mode: 'insensitive' },
+        providerName,
+        NOT: { id: exceptId },
+      },
+      select: { id: true },
+    });
+  }
+
+  adminUpdateUser(
+    id: string,
+    data: {
+      name?: string | null;
+      lastName?: string | null;
+      email?: string;
+      sendSuccessEmails?: boolean;
+      sendFailureEmails?: boolean;
+      sendStreakEmails?: boolean;
+    }
+  ) {
+    return this._user.model.user.update({
+      where: { id },
+      data,
+      select: { id: true },
+    });
+  }
+
+  adminUserBelongsToOrg(userId: string, organizationId: string) {
+    return this._user.model.user.findFirst({
+      where: {
+        id: userId,
+        organizations: { some: { organizationId } },
+      },
+      select: { id: true },
+    });
+  }
+
   getUserByProvider(providerId: string, provider: Provider) {
     return this._user.model.user.findFirst({
       where: {

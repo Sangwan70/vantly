@@ -16,6 +16,10 @@ import { AdminStatsService } from '@gitroom/nestjs-libraries/database/prisma/adm
 import { UsersService } from '@gitroom/nestjs-libraries/database/prisma/users/users.service';
 import { PaymentGatewaySettingsService } from '@gitroom/nestjs-libraries/database/prisma/settings/payment-gateway-settings.service';
 import { PaymentGatewaySettingsDto } from '@gitroom/nestjs-libraries/dtos/settings/payment-gateway-settings.dto';
+import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
+import { PricingPlansService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/pricing-plans.service';
+import { AdminUpdateUserDto } from '@gitroom/nestjs-libraries/dtos/users/admin.update.user.dto';
+import { AdminGrantSubscriptionDto } from '@gitroom/nestjs-libraries/dtos/billing/admin.grant.subscription.dto';
 import dayjs from 'dayjs';
 
 @ApiTags('Admin')
@@ -25,13 +29,106 @@ export class AdminController {
     private _errorsService: ErrorsService,
     private _adminStatsService: AdminStatsService,
     private _usersService: UsersService,
-    private _paymentGatewaySettingsService: PaymentGatewaySettingsService
+    private _paymentGatewaySettingsService: PaymentGatewaySettingsService,
+    private _subscriptionService: SubscriptionService,
+    private _pricingPlansService: PricingPlansService
   ) {}
 
   private assertSuperAdmin(user: User) {
     if (!user?.isSuperAdmin) {
       throw new HttpException('Unauthorized', 400);
     }
+  }
+
+  // Users grid: paginated, searchable, filterable. page is 0-based, same
+  // convention as /admin/errors.
+  @Get('/users')
+  async listUsers(
+    @GetUserFromRequest() user: User,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('status') status?: string,
+    @Query('tier') tier?: string,
+    @Query('sort') sort?: string,
+    @Query('dir') dir?: string
+  ) {
+    this.assertSuperAdmin(user);
+
+    const size = Math.min(Math.max(parseInt(pageSize || '25', 10) || 25, 1), 100);
+    const pageNum = Math.max(parseInt(page || '0', 10) || 0, 0);
+
+    return this._usersService.adminListUsers({
+      search: search?.trim() || undefined,
+      page: pageNum,
+      pageSize: size,
+      status: status === 'active' || status === 'banned' ? status : 'all',
+      tier: tier || 'ALL',
+      sort: sort || 'lastOnline',
+      dir: dir === 'asc' ? 'asc' : 'desc',
+    });
+  }
+
+  @Get('/users/:id')
+  async getUser(@GetUserFromRequest() user: User, @Param('id') id: string) {
+    this.assertSuperAdmin(user);
+    const found = await this._usersService.adminGetUser(id);
+    if (!found) {
+      throw new HttpException('User not found', 404);
+    }
+    return found;
+  }
+
+  @Put('/users/:id')
+  async updateUser(
+    @GetUserFromRequest() user: User,
+    @Param('id') id: string,
+    @Body() body: AdminUpdateUserDto
+  ) {
+    this.assertSuperAdmin(user);
+    const result = await this._usersService.adminUpdateUser(id, body);
+    if (result === 'not_found') {
+      throw new HttpException('User not found', 404);
+    }
+    if (result === 'email_taken') {
+      throw new HttpException(
+        'Another account with this email already exists',
+        400
+      );
+    }
+    return { success: true };
+  }
+
+  // Complimentary plan grant for one of the user's organizations. Reuses
+  // SubscriptionService.adminSetSubscription (the same path as
+  // /billing/admin-set-subscription) so tier-change side effects - trimming
+  // channels over the new limit, toggling team-member access - still run.
+  @Post('/users/:id/subscription')
+  async grantSubscription(
+    @GetUserFromRequest() user: User,
+    @Param('id') id: string,
+    @Body() body: AdminGrantSubscriptionDto
+  ) {
+    this.assertSuperAdmin(user);
+
+    if (!(await this._usersService.adminUserBelongsToOrg(id, body.organizationId))) {
+      throw new HttpException('User is not a member of that organization', 400);
+    }
+
+    let totalChannels = body.totalChannels;
+    if (totalChannels === undefined && body.tier !== 'FREE') {
+      const pricing = await this._pricingPlansService.getPricingMap();
+      totalChannels = pricing[body.tier]?.channel ?? 0;
+    }
+
+    await this._subscriptionService.adminSetSubscription(body.organizationId, {
+      tier: body.tier,
+      totalChannels: totalChannels ?? 0,
+      period: body.period,
+      isLifetime: !!body.isLifetime,
+    });
+
+    return { success: true };
   }
 
   @Post('/users/:id/ban')
