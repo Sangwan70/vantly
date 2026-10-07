@@ -4,6 +4,7 @@ import {
   PendingCheckResponse,
   PostDetails,
   PostResponse,
+  PromoteHashtagData,
   PromoteMedia,
   PromoteProfile,
   SocialProvider,
@@ -1230,6 +1231,72 @@ export class InstagramProvider
       mediaCount: d.media_count,
       media: (d.media?.data || []).map((m: any) => this.mapPromoteMedia(m)),
     };
+  }
+
+  // Promote: official Hashtag Search. Facebook Login only, and the Meta app
+  // needs the "Instagram Public Content Access" feature approved. Meta caps
+  // this at 30 unique hashtags per account per rolling 7 days (the caller
+  // tracks that, see PromoteHashtagService). top_media/recent_media return
+  // posts without usernames; recent_media covers the last 24 hours only.
+  async hashtagSearch(
+    accessToken: string,
+    internalId: string,
+    hashtag: string
+  ): Promise<PromoteHashtagData> {
+    const [pageToken] = accessToken.split('___');
+    const fail = (err: any): never => {
+      const code = err?.code;
+      const msg = String(err?.message || '');
+      if (code === 190 || code === 102) {
+        throw new Error('TOKEN_INVALID');
+      }
+      if (/unique hashtag|maximum number of/i.test(msg)) {
+        throw new Error('QUOTA');
+      }
+      if (code === 10 || code === 200 || /permission|public content/i.test(msg)) {
+        throw new Error('NO_PUBLIC_CONTENT_ACCESS');
+      }
+      if (code === 4 || code === 17 || code === 32 || code === 613) {
+        throw new Error('RATE_LIMITED');
+      }
+      throw new Error(msg || 'Instagram request failed');
+    };
+
+    const search = await (
+      await fetch(
+        `https://graph.facebook.com/v21.0/ig_hashtag_search?user_id=${internalId}&q=${encodeURIComponent(
+          hashtag
+        )}&access_token=${pageToken}`
+      )
+    ).json();
+    if (search?.error) {
+      fail(search.error);
+    }
+    const igHashtagId = search?.data?.[0]?.id;
+    if (!igHashtagId) {
+      throw new Error('NOT_FOUND: Instagram does not know this hashtag');
+    }
+
+    const fields =
+      'id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count';
+    const load = async (edge: 'top_media' | 'recent_media') => {
+      const json = await (
+        await fetch(
+          `https://graph.facebook.com/v21.0/${igHashtagId}/${edge}?user_id=${internalId}&fields=${fields}&limit=25&access_token=${pageToken}`
+        )
+      ).json();
+      if (json?.error) {
+        fail(json.error);
+      }
+      return (json?.data || []).map((m: any) => this.mapPromoteMedia(m));
+    };
+
+    const [topMedia, recentMedia] = await Promise.all([
+      load('top_media'),
+      load('recent_media'),
+    ]);
+
+    return { igHashtagId, topMedia, recentMedia };
   }
 
   music(accessToken: string, data: { q: string }) {

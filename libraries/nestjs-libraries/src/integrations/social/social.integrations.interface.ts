@@ -233,6 +233,12 @@ export type PromoteProfile = {
   media: PromoteMedia[];
 };
 
+export type PromoteHashtagData = {
+  igHashtagId: string;
+  topMedia: PromoteMedia[];
+  recentMedia: PromoteMedia[];
+};
+
 export type SimilarVideo = {
   title: string;
   channelTitle: string;
@@ -313,6 +319,11 @@ export interface SocialProvider
     username: string
   ): Promise<PromoteProfile>;
   ownProfile?(accessToken: string, internalId: string): Promise<PromoteProfile>;
+  hashtagSearch?(
+    accessToken: string,
+    internalId: string,
+    hashtag: string
+  ): Promise<PromoteHashtagData>;
   listVideos?(
     accessToken: string,
     channelId: string,

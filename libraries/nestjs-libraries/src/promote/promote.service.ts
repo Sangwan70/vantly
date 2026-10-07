@@ -76,7 +76,7 @@ export class PromoteService {
       });
   }
 
-  private async requireAccount(org: Organization, integrationId: string) {
+  async requireAccount(org: Organization, integrationId: string) {
     const found = await this._integrationService.getValidIntegrationAndProvider(
       org,
       integrationId
@@ -100,7 +100,7 @@ export class PromoteService {
     };
   }
 
-  private toHttp(e: any): never {
+  toHttp(e: any): never {
     const msg = String(e?.message || 'Instagram request failed');
     if (e instanceof HttpException) {
       throw e;

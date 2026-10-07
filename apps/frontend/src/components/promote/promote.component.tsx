@@ -2,13 +2,15 @@
 
 import React, { FC, useEffect, useMemo, useState } from 'react';
 import { LoadingComponent } from '@gitroom/frontend/components/layout/loading';
+import { Hashtags } from '@gitroom/frontend/components/promote/hashtags.component';
 import { Competitors } from '@gitroom/frontend/components/promote/competitors.component';
 import { usePromoteAccounts } from '@gitroom/frontend/components/promote/promote.hooks';
 
-type TabKey = 'competitors';
+type TabKey = 'competitors' | 'hashtags';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'competitors', label: 'Competitors' },
+  { key: 'hashtags', label: 'Hashtags' },
 ];
 
 const selectClass =
@@ -102,6 +104,7 @@ export const Promote: FC = () => {
             ))}
           </div>
           {tab === 'competitors' && <Competitors key={accountId} integrationId={accountId} />}
+          {tab === 'hashtags' && <Hashtags key={accountId} integrationId={accountId} />}
         </>
       )}
     </div>

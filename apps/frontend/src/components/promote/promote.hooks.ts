@@ -96,3 +96,78 @@ export const usePromoteOverview = (integrationId?: string) => {
     { revalidateOnFocus: false, shouldRetryOnError: false }
   );
 };
+
+export interface HashtagQuota {
+  used: number;
+  limit: number;
+  nextSlotAt: string | null;
+}
+
+export interface HashtagResult {
+  hashtag: string;
+  topStats: { avgLikes: number | null; avgComments: number | null };
+  postsPerHour: number | null;
+  competition: 'low' | 'medium' | 'high' | 'very high' | null;
+  formats: { type: string; share: number }[];
+  related: { tag: string; count: number }[];
+  topPosts: PromotePost[];
+  recentPosts: PromotePost[];
+  fetchedAt: string;
+  cached?: boolean;
+  quotaBlocked?: boolean;
+  quota?: HashtagQuota;
+}
+
+export interface HashtagHistoryRow {
+  hashtag: string;
+  fetchedAt: string;
+  competition: HashtagResult['competition'];
+  avgLikes: number | null;
+  inWindow: boolean;
+}
+
+export interface HashtagSet {
+  id: string;
+  name: string;
+  hashtags: string[];
+  createdAt: string;
+}
+
+export const useHashtagQuota = (integrationId: string) => {
+  const fetch = useFetch();
+  return useSWR<HashtagQuota>(
+    `promote-hashtag-quota-${integrationId}`,
+    async () => {
+      const res = await fetch(`/promote/hashtags/${integrationId}/quota`);
+      if (!res.ok) throw new Error(await errorMessage(res, 'Failed to load quota'));
+      return res.json();
+    },
+    { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
+};
+
+export const useHashtagHistory = (integrationId: string) => {
+  const fetch = useFetch();
+  return useSWR<HashtagHistoryRow[]>(
+    `promote-hashtag-history-${integrationId}`,
+    async () => {
+      const res = await fetch(`/promote/hashtags/${integrationId}/history`);
+      if (!res.ok) throw new Error(await errorMessage(res, 'Failed to load history'));
+      return res.json();
+    },
+    { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
+};
+
+export const useHashtagSets = () => {
+  const fetch = useFetch();
+  return useSWR<HashtagSet[]>(
+    'promote-hashtag-sets',
+    async () => {
+      const res = await fetch('/promote/hashtags/sets');
+      if (!res.ok) throw new Error(await errorMessage(res, 'Failed to load sets'));
+      return res.json();
+    },
+    { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
+};

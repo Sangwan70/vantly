@@ -54,6 +54,7 @@ model Organization {
   oauthApp            OAuthApp[]
   oauthAuthorizations OAuthAuthorization[]
   promoteCompetitors  PromoteCompetitor[]
+  promoteHashtagSets  PromoteHashtagSet[]
 
   @@index([apiKey])
   @@index([streakSince])
@@ -354,6 +355,7 @@ model Integration {
   plugs                 Plugs[]
   posts                 Post[]
   promoteCompetitors    PromoteCompetitor[]
+  promoteHashtagLookups PromoteHashtagLookup[]
 
   @@unique([organizationId, internalId])
   @@index([rootInternalId])
@@ -1330,4 +1332,39 @@ model PromoteCompetitorSnapshot {
 
   @@unique([competitorId, date])
   @@index([competitorId])
+}
+
+// Promote -> Hashtags. One row per (connected account, hashtag) researched
+// through the official Hashtag Search API. Meta allows 30 UNIQUE hashtags per
+// Instagram account per rolling 7 days, so this table is both the cache of
+// the last result and the ledger that enforces that cap: windowStart is when
+// the hashtag was first queried in its current 7-day window.
+model PromoteHashtagLookup {
+  id            String      @id @default(uuid())
+  integrationId String
+  hashtag       String
+  igHashtagId   String?
+  result        Json?
+  windowStart   DateTime
+  fetchedAt     DateTime
+  createdAt     DateTime    @default(now())
+  integration   Integration @relation(fields: [integrationId], references: [id])
+
+  @@unique([integrationId, hashtag])
+  @@index([integrationId, windowStart])
+}
+
+// Saved hashtag groups, to reuse when writing captions.
+model PromoteHashtagSet {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  hashtags       Json
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([deletedAt])
 }

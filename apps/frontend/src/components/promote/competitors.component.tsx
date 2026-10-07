@@ -25,7 +25,7 @@ const num = (n: number | null | undefined, digits = 0) =>
       })
     : '—';
 
-const compact = (n: number | null | undefined) =>
+export const compact = (n: number | null | undefined) =>
   typeof n === 'number'
     ? Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n)
     : '—';
@@ -68,7 +68,7 @@ const Sparkline: FC<{ points: (number | null)[] }> = ({ points }) => {
   );
 };
 
-const PostTile: FC<{ p: PromotePost }> = ({ p }) => (
+export const PostTile: FC<{ p: PromotePost }> = ({ p }) => (
   <a
     href={p.permalink}
     target="_blank"

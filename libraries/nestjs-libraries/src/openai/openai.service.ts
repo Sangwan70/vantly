@@ -92,8 +92,57 @@ const YoutubeVideoReviewSchema = z.object({
 });
 export type YoutubeVideoReview = z.infer<typeof YoutubeVideoReviewSchema>;
 
+const InstagramHashtagIdeasSchema = z.object({
+  hashtags: z
+    .array(
+      z.object({
+        tag: z.string(),
+        reason: z.string(),
+        reach: z.enum(['broad', 'mid', 'niche']),
+      })
+    )
+    .max(20),
+});
+export type InstagramHashtagIdeas = z.infer<typeof InstagramHashtagIdeasSchema>;
+
 @Injectable()
 export class OpenaiService {
+  // Promote: seed ideas for hashtag research. These are candidates to verify
+  // with real Hashtag Search data, not performance claims.
+  async generateInstagramHashtagIdeas(
+    topic: string,
+    exclude: string[] = []
+  ): Promise<InstagramHashtagIdeas> {
+    const parsed = (
+      await openai.chat.completions.parse({
+        model: 'gpt-4.1',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are an Instagram growth strategist. Given a niche or post topic, suggest up to 20 relevant hashtags: a deliberate mix of broad (huge, competitive), mid-size and niche (small, targeted) tags. Return each tag without the # symbol, lowercase, letters/numbers/underscores only, with a one-sentence reason it fits. Never suggest banned, spammy or misleading tags (like follow-for-follow or like-for-like tags). Do not claim any tag has specific reach numbers.',
+          },
+          {
+            role: 'user',
+            content: `Topic: ${topic}${
+              exclude.length ? `\n\nDo not repeat these: ${exclude.join(', ')}` : ''
+            }`,
+          },
+        ],
+        response_format: zodResponseFormat(
+          InstagramHashtagIdeasSchema,
+          'hashtagIdeas'
+        ),
+      })
+    ).choices[0].message.parsed;
+
+    if (!parsed) {
+      throw new Error('The AI did not return a valid response, please try again');
+    }
+
+    return parsed;
+  }
+
   async generateImage(prompt: string, isVertical = false) {
     // gpt-image models always return base64 (b64_json) and do not accept the
     // `response_format` parameter, unlike the deprecated dall-e-3.
