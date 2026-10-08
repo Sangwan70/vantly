@@ -160,6 +160,20 @@ export class IntegrationRepository {
       },
     });
 
+    // The row being finished (`id`) is the one created by the OAuth flow the
+    // user just used, so ITS provider is the truth. When the account already
+    // exists under another row (e.g. connected earlier via "Instagram
+    // (standalone)" and now via "Instagram (Facebook Business)"), that older
+    // row is reused below and must adopt the new provider too - otherwise it
+    // keeps the old label while holding the new kind of token.
+    const finishing =
+      existing && existing.id !== id
+        ? await this._integration.model.integration.findUnique({
+            where: { id },
+            select: { providerIdentifier: true },
+          })
+        : null;
+
     if (existing) {
       await this._posts.model.post.updateMany({
         where: {
@@ -187,6 +201,7 @@ export class IntegrationRepository {
       },
       data: {
         ...params,
+        ...(finishing ? { providerIdentifier: finishing.providerIdentifier } : {}),
         disabled: false,
         deletedAt: null,
       },
